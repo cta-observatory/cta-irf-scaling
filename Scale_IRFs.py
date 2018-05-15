@@ -2,6 +2,7 @@
 # coding=utf-8
 
 import os
+import shutil
 import re
 import glob
 import pyfits
@@ -11,7 +12,24 @@ from matplotlib import pyplot
 
 
 class CalDB:
+    """
+    A class to scale the standard CTA IRFs, stored in the CALDB data base in the FITS format.
+    """
+
     def __init__(self, caldb_name, irf_name, verbose=False):
+        """
+        Constructor of the class. CALDB data bases will be loaded from the library set by "CALDB" environment variable.
+
+        Parameters
+        ----------
+        caldb_name: string
+            CALDB name to use, e.g. '1dc' or 'prod3b'
+        irf_name: string
+            IRF name to use, e.g. 'North_z20_50h'.
+        verbose: bool, optional
+            Defines whether to pring additional information.
+        """
+
         self.caldb_path = os.environ['CALDB']
         self.caldb_name = caldb_name
         self.irf = irf_name
@@ -28,6 +46,15 @@ class CalDB:
                                                                                                   irf=irf_name)
         
     def _check_available_irfs(self):
+        """
+        Internal method that checks which CALDB/IRFs are available in the current library.
+        Prints an error if the specified CALDB/IRF combination is not found.
+
+        Returns
+        -------
+        None
+        """
+
         available_caldb = [path.split('/')[-1] for path in glob.glob(caldb_path + '/data/cta/*')]
 
         if self.verbose:
@@ -54,13 +81,57 @@ class CalDB:
             self.am_ok = False
             
     def _scale_psf(self, input_irf_file, psf_scale, n_psf_components=3):
+        """
+        This internal method scales the IRF PSF extension.
+
+        Parameters
+        ----------
+        input_irf_file: pyfits.HDUList
+            Open pyfits IRF file, which contains the PSF that should be scaled.
+        psf_scale: float
+            The scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
+        n_psf_components: int, optional
+            The number of PSF sub-components (gaussians) in the IRF file. Defaults to 3 (typical for prod3b).
+
+        Returns
+        -------
+        None
+        """
+
         for psf_i in range(0, n_psf_components):
             input_irf_file['POINT SPREAD FUNCTION'].data['SIGMA_{:d}'.format(psf_i+1)] *= psf_scale
             
     def _scale_aeff(self, input_irf_file,
                     aeff_scale_energy, aeff_norm_energy, aeff_transition_width_energy,
                     aeff_scale_theta, aeff_norm_theta, aeff_transition_width_theta):
-        
+        """
+        This internal method scales the IRF collection area shape. Two scalings can be applied: (1) vs energy and
+        (2) vs off-axis angle. In both cases the scaling function is taken as (1 + scale * tanh((x-x0)/dx)). In case
+        (1) the scaling value x is log10(energy).
+
+        Parameters
+        ----------
+        input_irf_file: pyfits.HDUList
+            Open pyfits IRF file, which contains the Aeff that should be scaled.
+        aeff_scale_energy: float
+            Amplitude of the scaling vs energy, must be in [0;1] range (1 means +/-100% scaling).
+        aeff_norm_energy: float
+            Energy of the normalization point x0 in TeV.
+        aeff_transition_width_energy: float
+            Smoothing term dx, defining the sharpness of the transition.
+        aeff_scale_theta: float
+            Amplitude of the scaling vs off-axis angle, must be in [0;1] range (1 means +/-100% scaling).
+        aeff_norm_theta: float
+            Off-axis angle of the normalization point x0 in degrees.
+        aeff_transition_width_theta: float
+            Smoothing term dx, defining the sharpness of the transition, in degrees.
+
+        Returns
+        -------
+        None
+        """
+
+        # Reading the Aeff parameters
         self._aeff['Elow']     = input_irf_file['Effective area'].data['Energ_lo'][0]
         self._aeff['Ehigh']    = input_irf_file['Effective area'].data['Energ_hi'][0]
         self._aeff['ThetaLow'] = input_irf_file['Effective area'].data['Theta_lo'][0]
@@ -69,86 +140,183 @@ class CalDB:
         self._aeff['E']     = scipy.sqrt(self._aeff['Elow']*self._aeff['Ehigh'])
         self._aeff['Theta'] = (self._aeff['ThetaLow']+self._aeff['ThetaHi'])/2.0
 
+        # Creating the energy-theta meshgrid
         energy, theta = scipy.meshgrid(self._aeff['E'], self._aeff['Theta'], indexing='ij')
 
+        # Scaling the Aeff energy dependence
         scaling_val = scipy.log10(energy / aeff_norm_energy) / aeff_transition_width_energy
         self._aeff['Area_new'] = self._aeff['Area'] * (1 + aeff_scale_energy * scipy.tanh(scaling_val))
 
+        # Scaling the Aeff off-axis angle dependence
         scaling_val = (theta - aeff_norm_theta) / aeff_transition_width_theta
         self._aeff['Area_new'] = self._aeff['Area_new'] * (1 + aeff_scale_theta * scipy.tanh(scaling_val))
         
+        # Recording the scaled Aeff
         input_irf_file['Effective area'].data['EffArea'][0] = self._aeff['Area_new'].transpose()
 
     def _append_irf_to_db(self, output_irf_name, output_irf_file_name):
+        """
+        This internal method appends the new IRF data to the existing calibration data base.
+
+        Parameters
+        ----------
+        output_irf_name: str
+            The name of the IRF to append, e.g. "Aeff_modified". Current IRF name will be added as a prefix.
+        output_irf_file_name: str
+            Name of the file, which stores the new IRF, e.g. "irf_North_z20_50h_modified.fits"
+
+        Returns
+        -------
+        None
+        """
+
         db_file_path = '{path:s}/data/cta/{caldb:s}/caldb.indx'.format(path=self.caldb_path, caldb=self.caldb_name)
+
+        # Making a backup
+        shutil.copy(db_file_path, db_file_path+'.bak')
+
+        # Opening the database file
         db_file = pyfits.open(db_file_path)
 
+        # Creating a new IRF table which will contain 4 more entries - new PSF/Aeff/Edisp/bkg.
         nrows_orig = len(db_file['CIF'].data)
         nrows_new = nrows_orig + 4
         hdu = pyfits.BinTableHDU.from_columns(db_file['CIF'].columns, nrows=nrows_new)
 
+        # Aeff entry data
         aeff_vals = ['CTA', '1DC', 'NONE', 'NONE', 'ONLINE', 'data/cta/1dc/bcf/' + self.irf, output_irf_file_name,
                      'BCF', 'DATA', 'EFF_AREA', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
                      '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA effective area']
 
+        # PSF entry data
         psf_vals = ['CTA', '1DC', 'NONE', 'NONE', 'ONLINE', 'data/cta/1dc/bcf/' + self.irf, output_irf_file_name,
                     'BCF', 'DATA', 'RPSF', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
                     '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA point spread function']
 
+        # Edisp entry data
         edisp_vals = ['CTA', '1DC', 'NONE', 'NONE', 'ONLINE', 'data/cta/1dc/bcf/' + self.irf, output_irf_file_name,
                       'BCF', 'DATA', 'EDISP', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
                       '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA energy dispersion']
 
+        # Background entry data
         bkg_vals = ['CTA', '1DC', 'NONE', 'NONE', 'ONLINE', 'data/cta/1dc/bcf/'+self.irf, output_irf_file_name,
                     'BCF', 'DATA', 'BKG', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
                     '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA background']
 
+        # Filling the columns of the new table
         for col_i, colname in enumerate(hdu.columns.names):
+            # First fill the previously existing data
             hdu.data[colname][:nrows_orig] = db_file['CIF'].data[colname]
-            hdu.data[colname][nrows_orig] = aeff_vals[col_i]
+            # Now fill the newly created entries
+            hdu.data[colname][nrows_orig+0] = aeff_vals[col_i]
             hdu.data[colname][nrows_orig+1] = psf_vals[col_i]
             hdu.data[colname][nrows_orig+2] = edisp_vals[col_i]
             hdu.data[colname][nrows_orig+3] = bkg_vals[col_i]
 
+        # Replacing the old IRF table
         db_file['CIF'].data = hdu.data
 
+        # Saving the data base
         db_file.writeto(db_file_path, clobber=True)
+        db_file.close()
 
     def scale_irf(self,
-                  psf_scale=1,
-                  aeff_scale_energy=0.0, aeff_norm_energy=1.0, aeff_transition_width_energy=1.0,
-                  aeff_scale_theta=0.0, aeff_norm_theta=1.0, aeff_transition_width_theta=1.0,
+                  psf_scale=1.0,
+                  aeff_energy_scale=0.0, aeff_energy_norm=1.0, aeff_energy_transition_width=1.0,
+                  aeff_theta_scale=0.0, aeff_theta_norm=1.0, aeff_theta_transition_width=1.0,
                   output_irf_file_name=""):
+        """
+        This method performs scaling of the loaded IRF - both PSF and Aeff, if necessary.
+        For the collection area two scalings can be applied: (1) vs energy and
+        (2) vs off-axis angle. In both cases the scaling function is taken as
+        (1 + scale * tanh((x-x0)/dx)). In case (1) the scaling value x is log10(energy).
+
+        Parameters
+        ----------
+        psf_scale: float, optional
+            The PSF scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
+            Defaults to 1.0 - equivalent of no scaling.
+        aeff_energy_scale: float, optional
+            Amplitude of the scaling vs energy, must be in [0;1] range (1 means +/-100% scaling).
+            Defaults to 0.0 - equivalent of no scaling.
+        aeff_energy_norm: float, optional
+            Energy of the normalization point x0 in TeV.
+            Defaults to 1.0 TeV.
+        aeff_energy_transition_width: float, optional
+            Smoothing term dx, defining the sharpness of the transition.
+            Defaults to 1.0.
+        aeff_theta_scale: float
+            Amplitude of the scaling vs off-axis angle, must be in [0;1] range (1 means +/-100% scaling).
+            Defaults to 0.0 - equivalent of no scaling.
+        aeff_theta_norm: float
+            Off-axis angle of the normalization point x0 in degrees.
+            Defaults to 1.0 degree.
+        aeff_theta_transition_width: float, optional
+            Smoothing term dx, defining the sharpness of the transition, in degrees.
+            Defaults to 1.0.
+        output_irf_file_name: str, optional
+            The name of the output IRF file, e.g. 'irf_scaled_version.fits' (the name must follow the "irf_*.fits"
+            template). The file will be put to the main directory of the chosen IRF. If empty, the name will be
+            automatically generated.
+            Defaults to an empty string.
+
+        Returns                         
+        -------
+        None
+        """
         
-        if not self.am_ok:
-            print("ERROR: something's wrong with the CALDB/IRF names.")
+        if self.am_ok:
+            # Opening the IRF input file
+            input_irf_file = pyfits.open(self.input_irf_file_name, 'readonly')
+            # Scaling the PSF
+            self._scale_psf(input_irf_file, psf_scale)
+            # Scaling the Aeff
+            self._scale_aeff(input_irf_file,
+                             aeff_energy_scale, aeff_energy_norm, aeff_energy_transition_width,
+                             aeff_theta_scale, aeff_theta_norm, aeff_theta_transition_width)
 
-        input_irf_file = pyfits.open(self.input_irf_file_name, 'readonly')
-        self._scale_psf(input_irf_file, psf_scale)
-        self._scale_aeff(input_irf_file,
-                         aeff_scale_energy, aeff_norm_energy, aeff_transition_width_energy,
-                         aeff_scale_theta, aeff_norm_theta, aeff_transition_width_theta)
+            # Getting the new IRF and output file names
+            if output_irf_file_name == "":
+                # No output file name was provided - generating one
+                output_psf_part = "P-{:.1f}".format(psf_scale)
+                output_aeff_energy_part = "A-{:.1f}-{:.1f}-{:.1f}".format(aeff_energy_scale,
+                                                                          aeff_energy_norm,
+                                                                          aeff_energy_transition_width)
+                output_aeff_theta_part = "{:.1f}-{:.1f}-{:.1f}".format(aeff_theta_scale,
+                                                                       aeff_theta_norm,
+                                                                       aeff_theta_transition_width)
+                # IRF name
+                output_irf_name = output_psf_part + "_" + output_aeff_energy_part + output_aeff_theta_part
+                # Output file name
+                output_irf_file_name = "irf_{:s}.fits".format(output_irf_name)
+            else:
+                # Output file name was provided. Will chunk the IRF name out of it.
+                output_irf_name = re.findall("irf_(.+).fits", output_irf_file_name)[0]
 
-        if output_irf_file_name == "":
-            output_psf_part = "P-{:.1f}".format(psf_scale)
-            output_aeff_energy_part = "A-{:.1f}-{:.1f}-{:.1f}".format(aeff_scale_energy,
-                                                                               aeff_norm_energy,
-                                                                               aeff_transition_width_energy)
-            output_aeff_theta_part = "{:.1f}-{:.1f}-{:.1f}".format(aeff_scale_theta,
-                                                                               aeff_norm_theta,
-                                                                               aeff_transition_width_theta)
-            output_irf_name = output_psf_part + "_" + output_aeff_energy_part + output_aeff_theta_part
-            output_irf_file_name = "irf_{:s}.fits".format(output_irf_name)
+            # Figuring out the output path
+            output_path = '{path:s}/data/cta/{caldb:s}/bcf/{irf:s}'.format(path=self.caldb_path,
+                                                                           caldb=self.caldb_name,
+                                                                           irf=self.irf)
 
-        output_path = '{path:s}/data/cta/{caldb:s}/bcf/{irf:s}'.format(path=self.caldb_path,
-                                                                       caldb=self.caldb_name,
-                                                                       irf=self.irf)
+            # Writing the scaled IRF
+            input_irf_file.writeto(output_path + "/" + output_irf_file_name, clobber=True)
 
-        input_irf_file.writeto(output_path + "/" + output_irf_file_name, clobber=True)
-
-        self._append_irf_to_db(output_irf_name, output_irf_file_name)
+            # Updating the calibration data base with the new IRF
+            self._append_irf_to_db(output_irf_name, output_irf_file_name)
+        else:
+            print("ERROR: something's wrong with the CALDB/IRF names. So can not update the data base.")
 
     def get_aeff_scale_map(self):
+        """
+        This method returns the Aeff scale map, which can be useful for check of the used settings.
+        Must be run after the scale_irf() method.
+
+        Returns
+        -------
+        dict:
+            A dictionary with the Aeff scale map.
+        """
+
         scale_map = dict()
         
         scale_map['E_edges'] = scipy.concatenate((self._aeff['Elow'], [self._aeff['Ehigh'][-1]]))
@@ -160,6 +328,33 @@ class CalDB:
         scale_map['Map'] -= 1
         
         return scale_map
+
+    def plot_aeff_scale_map(self, vmin=-0.5, vmax=0.5):
+        """
+        This method plots the Aeff scale map, which can be useful for check of the used settings.
+        Must be run after the scale_irf() method.
+
+        Parameters
+        ----------
+        vmin: float, optional
+            Minimal scale to plot. Defaults to -0.5.
+        vmax: float, optional
+            Maximal scale to plot. Defaults to 0.5.
+
+        Returns
+        -------
+        None
+        """
+
+        scale_map = self.get_aeff_scale_map()
+
+        pyplot.semilogx()
+
+        pyplot.xlabel('Energy, TeV')
+        pyplot.ylabel('Off-center angle, deg')
+        pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['Relative_map'].transpose(),
+                          cmap='bwr', vmin=vmin, vmax=vmax)
+        pyplot.colorbar()
         
 
 # =================
@@ -184,12 +379,7 @@ caldb.scale_irf(psf_scale,
                 aeff_scale_theta, aeff_norm_theta, aeff_transition_width_theta)
 
 pyplot.clf()
-pyplot.semilogx()
 
-pyplot.xlabel('Energy, TeV')
-pyplot.ylabel('Off-center angle, deg')
-pyplot.pcolormesh(aeff['E_edges'], aeff['Theta_edges'], aeff['Relative_map'].transpose(), 
-                  cmap='bwr', vmin=-0.5, vmax=0.5)
-pyplot.colorbar()
+caldb.plot_aeff_scale_map()
 
 pyplot.show()
