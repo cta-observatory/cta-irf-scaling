@@ -102,8 +102,8 @@ class CalDB:
             input_irf_file['POINT SPREAD FUNCTION'].data['SIGMA_{:d}'.format(psf_i+1)] *= psf_scale
             
     def _scale_aeff(self, input_irf_file,
-                    aeff_scale_energy, aeff_norm_energy, aeff_transition_width_energy,
-                    aeff_scale_theta, aeff_norm_theta, aeff_transition_width_theta):
+                    aeff_energy_scale, aeff_energy_norm, aeff_energy_transition_width,
+                    aeff_theta_scale, aeff_theta_norm, aeff_theta_transition_width):
         """
         This internal method scales the IRF collection area shape. Two scalings can be applied: (1) vs energy and
         (2) vs off-axis angle. In both cases the scaling function is taken as (1 + scale * tanh((x-x0)/dx)). In case
@@ -113,17 +113,17 @@ class CalDB:
         ----------
         input_irf_file: pyfits.HDUList
             Open pyfits IRF file, which contains the Aeff that should be scaled.
-        aeff_scale_energy: float
+        aeff_energy_scale: float
             Amplitude of the scaling vs energy, must be in [0;1] range (1 means +/-100% scaling).
-        aeff_norm_energy: float
+        aeff_energy_norm: float
             Energy of the normalization point x0 in TeV.
-        aeff_transition_width_energy: float
+        aeff_energy_transition_width: float
             Smoothing term dx, defining the sharpness of the transition.
-        aeff_scale_theta: float
+        aeff_theta_scale: float
             Amplitude of the scaling vs off-axis angle, must be in [0;1] range (1 means +/-100% scaling).
-        aeff_norm_theta: float
+        aeff_theta_norm: float
             Off-axis angle of the normalization point x0 in degrees.
-        aeff_transition_width_theta: float
+        aeff_theta_transition_width: float
             Smoothing term dx, defining the sharpness of the transition, in degrees.
 
         Returns
@@ -144,12 +144,12 @@ class CalDB:
         energy, theta = scipy.meshgrid(self._aeff['E'], self._aeff['Theta'], indexing='ij')
 
         # Scaling the Aeff energy dependence
-        scaling_val = scipy.log10(energy / aeff_norm_energy) / aeff_transition_width_energy
-        self._aeff['Area_new'] = self._aeff['Area'] * (1 + aeff_scale_energy * scipy.tanh(scaling_val))
+        scaling_val = scipy.log10(energy / aeff_energy_norm) / aeff_energy_transition_width
+        self._aeff['Area_new'] = self._aeff['Area'] * (1 + aeff_energy_scale * scipy.tanh(scaling_val))
 
         # Scaling the Aeff off-axis angle dependence
-        scaling_val = (theta - aeff_norm_theta) / aeff_transition_width_theta
-        self._aeff['Area_new'] = self._aeff['Area_new'] * (1 + aeff_scale_theta * scipy.tanh(scaling_val))
+        scaling_val = (theta - aeff_theta_norm) / aeff_theta_transition_width
+        self._aeff['Area_new'] = self._aeff['Area_new'] * (1 + aeff_theta_scale * scipy.tanh(scaling_val))
         
         # Recording the scaled Aeff
         input_irf_file['Effective area'].data['EffArea'][0] = self._aeff['Area_new'].transpose()
