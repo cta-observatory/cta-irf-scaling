@@ -1,10 +1,18 @@
 #!/usr/bin/env python
 # coding=utf-8
 
+# ===================================================================================
+# This script/class script performs the scaling of the CTA calibration data base
+# IRF following the given settings. It is intended for the studies of the systematics
+# effects in CTA data analysis.
+# Author: Ievgen Vovk (2018)
+# ===================================================================================
+
 import os
 import shutil
-import re
 import glob
+import argparse
+import re
 import pyfits
 import scipy
 
@@ -27,7 +35,7 @@ class CalDB:
         irf_name: string
             IRF name to use, e.g. 'North_z20_50h'.
         verbose: bool, optional
-            Defines whether to pring additional information.
+            Defines whether to print additional information during the execution.
         """
 
         self.caldb_path = os.environ['CALDB']
@@ -114,13 +122,15 @@ class CalDB:
         input_irf_file: pyfits.HDUList
             Open pyfits IRF file, which contains the Aeff that should be scaled.
         aeff_energy_scale: float
-            Amplitude of the scaling vs energy, must be in [0;1] range (1 means +/-100% scaling).
+            Amplitude of the scaling vs energy, must be in [-1;1] range (1 means +/-100% scaling).
+            Sign reverses the scaling direction.
         aeff_energy_norm: float
             Energy of the normalization point x0 in TeV.
         aeff_energy_transition_width: float
             Smoothing term dx, defining the sharpness of the transition.
         aeff_theta_scale: float
-            Amplitude of the scaling vs off-axis angle, must be in [0;1] range (1 means +/-100% scaling).
+            Amplitude of the scaling vs off-axis angle, must be in [-1;1] range (1 means +/-100% scaling).
+            Sign reverses the scaling direction.
         aeff_theta_norm: float
             Off-axis angle of the normalization point x0 in degrees.
         aeff_theta_transition_width: float
@@ -132,15 +142,15 @@ class CalDB:
         """
 
         # Reading the Aeff parameters
-        self._aeff['Elow']     = input_irf_file['Effective area'].data['Energ_lo'][0]
-        self._aeff['Ehigh']    = input_irf_file['Effective area'].data['Energ_hi'][0]
-        self._aeff['ThetaLow'] = input_irf_file['Effective area'].data['Theta_lo'][0]
-        self._aeff['ThetaHi']  = input_irf_file['Effective area'].data['Theta_hi'][0]
-        self._aeff['Area']     = input_irf_file['Effective area'].data['EffArea'][0].transpose()
+        self._aeff['Elow']     = input_irf_file['Effective area'].data['Energ_lo'][0].copy()
+        self._aeff['Ehigh']    = input_irf_file['Effective area'].data['Energ_hi'][0].copy()
+        self._aeff['ThetaLow'] = input_irf_file['Effective area'].data['Theta_lo'][0].copy()
+        self._aeff['ThetaHi']  = input_irf_file['Effective area'].data['Theta_hi'][0].copy()
+        self._aeff['Area']     = input_irf_file['Effective area'].data['EffArea'][0].transpose().copy()
         self._aeff['E']     = scipy.sqrt(self._aeff['Elow']*self._aeff['Ehigh'])
         self._aeff['Theta'] = (self._aeff['ThetaLow']+self._aeff['ThetaHi'])/2.0
 
-        # Creating the energy-theta meshgrid
+        # Creating the energy-theta mesh grid
         energy, theta = scipy.meshgrid(self._aeff['E'], self._aeff['Theta'], indexing='ij')
 
         # Scaling the Aeff energy dependence
@@ -237,7 +247,8 @@ class CalDB:
             The PSF scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
             Defaults to 1.0 - equivalent of no scaling.
         aeff_energy_scale: float, optional
-            Amplitude of the scaling vs energy, must be in [0;1] range (1 means +/-100% scaling).
+            Amplitude of the scaling vs energy, must be in [-1;1] range (1 means +/-100% scaling).
+            Sign reverses the scaling direction.
             Defaults to 0.0 - equivalent of no scaling.
         aeff_energy_norm: float, optional
             Energy of the normalization point x0 in TeV.
@@ -246,7 +257,8 @@ class CalDB:
             Smoothing term dx, defining the sharpness of the transition.
             Defaults to 1.0.
         aeff_theta_scale: float
-            Amplitude of the scaling vs off-axis angle, must be in [0;1] range (1 means +/-100% scaling).
+            Amplitude of the scaling vs off-axis angle, must be in [-1;1] range (1 means +/-100% scaling).
+            Sign reverses the scaling direction.
             Defaults to 0.0 - equivalent of no scaling.
         aeff_theta_norm: float
             Off-axis angle of the normalization point x0 in degrees.
@@ -352,7 +364,7 @@ class CalDB:
 
         pyplot.xlabel('Energy, TeV')
         pyplot.ylabel('Off-center angle, deg')
-        pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['Relative_map'].transpose(),
+        pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['Map'].transpose(),
                           cmap='bwr', vmin=vmin, vmax=vmax)
         pyplot.colorbar()
         
@@ -361,25 +373,89 @@ class CalDB:
 # === Main code ===
 # =================
 
-caldb_path = os.environ['CALDB']
-caldb = '1dc'
-irf = 'North_z20_50h'
+if __name__ == "__main__":
+    # --------------------------------------
+    # *** Parsing command line arguments ***
 
-psf_scale = 2.0
-aeff_norm_energy = 1.0
-aeff_norm_theta = 2.5
-aeff_transition_width_energy = 1
-aeff_transition_width_theta = 1.0
-aeff_scale_energy = +0.2
-aeff_scale_theta = -0.2
+    arg_parser = argparse.ArgumentParser(description="""
+                                                    This script performs the scaling of the CTA calibration data base
+                                                    IRF following the given settings. It is intended for the studies
+                                                    of the systematics effects in CTA data analysis.
+                                                    Please note, that the existing data base will be updated with the 
+                                                    newly scaled IRF, i.e. your 'caldb.indx' file will be over-written. 
+                                                    Though a back up copy is created each time the script is run, 
+                                                    consider creating a master back up manually just in case.
+                                                    """)
+    arg_parser.add_argument("--caldb", default='prod3b',
+                            help='Calibration data base name, e.g. "1dc"')
+    arg_parser.add_argument("--irf", default='',
+                            help='The IRF to scale, e.g. "North_z20_50h"')
+    arg_parser.add_argument("--psf_scale", default=1.0,
+                            help='The PSF scale factor. Each PSF sigma (there can be several!) will be multiplied by it.')
+    arg_parser.add_argument("--aeff_energy_scale", default=0.0,
+                            help='Amplitude of the scaling vs energy, must be in [-1;1] range (1 means +/-100% scaling).')
+    arg_parser.add_argument("--aeff_energy_norm", default=1.0,
+                            help='Energy of the normalization point in TeV.')
+    arg_parser.add_argument("--aeff_energy_transition_width", default=1.0,
+                            help='Smoothing term, defining the sharpness of the transition.')
+    arg_parser.add_argument("--aeff_theta_scale", default=0.0,
+                            help='Amplitude of the scaling vs off-axis angle, must be in [-1;1] range (1 means +/-100% scaling).')
+    arg_parser.add_argument("--aeff_theta_norm", default=1.0,
+                            help='Off-axis angle of the normalization point in degrees.')
+    arg_parser.add_argument("--aeff_theta_transition_width", default=1.0,
+                            help='Smoothing term, defining the sharpness of the transition, in degrees.')
+    arg_parser.add_argument("--output_irf_file_name", default="",
+                            help="""The name of the output IRF file, e.g. 'irf_scaled_version.fits' (the name must follow
+                           the "irf_*.fits" template). The file will be put to the main directory of the chosen IRF. 
+                           If empty, the name will be automatically generated.
+                           """)
+    arg_parser.add_argument("--plot_aeff_scale_map", default=True,
+                            help="Defines whether the resulting Aeff scale map should be displayed.")
+    arg_parser.add_argument("--verbose", default=False,
+                            help="Defines whether to print additional information during the run.")
+    cmd_args = arg_parser.parse_args()
+    # --------------------------------------
 
-caldb = CalDB(caldb, irf, verbose=False)
-caldb.scale_irf(psf_scale,
-                aeff_scale_energy, aeff_norm_energy, aeff_transition_width_energy,
-                aeff_scale_theta, aeff_norm_theta, aeff_transition_width_theta)
+    if cmd_args.caldb == '' or cmd_args.irf == '':
+        print("CALDB or IRF names were not specified. Exiting... ")
+        print("Please read the help!")
+        exit()
+    else:
+        caldb = cmd_args.caldb
+        irf = cmd_args.irf
+        psf_scale = cmd_args.psf_scale
+        aeff_energy_scale = float(cmd_args.aeff_energy_scale)
+        aeff_energy_norm = float(cmd_args.aeff_energy_norm)
+        aeff_energy_transition_width = float(cmd_args.aeff_energy_transition_width)
+        aeff_theta_scale = float(cmd_args.aeff_theta_scale)
+        aeff_theta_norm = float(cmd_args.aeff_theta_norm)
+        aeff_theta_transition_width = float(cmd_args.aeff_theta_transition_width)
+        output_irf_file_name = cmd_args.output_irf_file_name
+        plot_aeff_scale_map = cmd_args.plot_aeff_scale_map
 
-pyplot.clf()
-
-caldb.plot_aeff_scale_map()
-
-pyplot.show()
+        print("")
+        print("=== Was called with the following settings ===")
+        print("  CALDB name:                   {:s}".format(caldb))
+        print("  IRF name:                     {:s}".format(irf))
+        print("  PSF scale:                    {:.2f}".format(psf_scale))
+        print("  Aeff energy scale:            {:.1f}".format(aeff_energy_scale))
+        print("  Aeff energy norm:             {:.1f}".format(aeff_energy_norm))
+        print("  Aeff energy transition_width: {:.1f}".format(aeff_energy_transition_width))
+        print("  Aeff theta scale:             {:.1f}".format(aeff_theta_scale))
+        print("  Aeff theta norm:              {:.1f}".format(aeff_theta_norm))
+        print("  Aeff theta transition_width:  {:.1f}".format(aeff_theta_transition_width))
+        print("  Output IRF file name:         '{:s}'".format(output_irf_file_name))
+        print("  Plot Aeff scale map:          {}".format(plot_aeff_scale_map))
+        print("")
+        
+        caldb_path = os.environ['CALDB']
+        
+        caldb = CalDB(caldb, irf, verbose=False)
+        caldb.scale_irf(psf_scale,
+                        aeff_energy_scale, aeff_energy_norm, aeff_energy_transition_width,
+                        aeff_theta_scale, aeff_theta_norm, aeff_theta_transition_width, output_irf_file_name)
+        
+        if plot_aeff_scale_map:
+            pyplot.clf()
+            caldb.plot_aeff_scale_map()
+            pyplot.show()
