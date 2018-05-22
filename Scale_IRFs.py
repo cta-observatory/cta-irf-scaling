@@ -393,13 +393,13 @@ if __name__ == "__main__":
     arg_parser.add_argument("--psf_scale", default=1.0,
                             help='The PSF scale factor. Each PSF sigma (there can be several!) will be multiplied by it.')
     arg_parser.add_argument("--aeff_energy_scale", default=0.0,
-                            help='Amplitude of the scaling vs energy, must be in [-1;1] range (1 means +/-100% scaling).')
+                            help='Amplitude of the scaling vs energy, must be in [-1;1] range (1 means +/-100%% scaling).')
     arg_parser.add_argument("--aeff_energy_norm", default=1.0,
                             help='Energy of the normalization point in TeV.')
     arg_parser.add_argument("--aeff_energy_transition_width", default=1.0,
                             help='Smoothing term, defining the sharpness of the transition.')
     arg_parser.add_argument("--aeff_theta_scale", default=0.0,
-                            help='Amplitude of the scaling vs off-axis angle, must be in [-1;1] range (1 means +/-100% scaling).')
+                            help='Amplitude of the scaling vs off-axis angle, must be in [-1;1] range (1 means +/-100%% scaling).')
     arg_parser.add_argument("--aeff_theta_norm", default=1.0,
                             help='Off-axis angle of the normalization point in degrees.')
     arg_parser.add_argument("--aeff_theta_transition_width", default=1.0,
