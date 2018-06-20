@@ -194,22 +194,30 @@ class CalDB:
         hdu = pyfits.BinTableHDU.from_columns(db_file['CIF'].columns, nrows=nrows_new)
 
         # Aeff entry data
-        aeff_vals = ['CTA', '1DC', 'NONE', 'NONE', 'ONLINE', 'data/cta/1dc/bcf/' + self.irf, output_irf_file_name,
+        aeff_vals = ['CTA', self.caldb_name, 'NONE', 'NONE', 'ONLINE',
+                     'data/cta/{db:s}/bcf/{irf:s}'.format(db=self.caldb_name, irf=self.irf),
+                     output_irf_file_name,
                      'BCF', 'DATA', 'EFF_AREA', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
                      '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA effective area']
 
         # PSF entry data
-        psf_vals = ['CTA', '1DC', 'NONE', 'NONE', 'ONLINE', 'data/cta/1dc/bcf/' + self.irf, output_irf_file_name,
+        psf_vals = ['CTA', self.caldb_name, 'NONE', 'NONE', 'ONLINE',
+                    'data/cta/{db:s}/bcf/{irf:s}'.format(db=self.caldb_name, irf=self.irf),
+                    output_irf_file_name,
                     'BCF', 'DATA', 'RPSF', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
                     '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA point spread function']
 
         # Edisp entry data
-        edisp_vals = ['CTA', '1DC', 'NONE', 'NONE', 'ONLINE', 'data/cta/1dc/bcf/' + self.irf, output_irf_file_name,
+        edisp_vals = ['CTA', self.caldb_name, 'NONE', 'NONE', 'ONLINE',
+                      'data/cta/{db:s}/bcf/{irf:s}'.format(db=self.caldb_name, irf=self.irf),
+                      output_irf_file_name,
                       'BCF', 'DATA', 'EDISP', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
                       '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA energy dispersion']
 
         # Background entry data
-        bkg_vals = ['CTA', '1DC', 'NONE', 'NONE', 'ONLINE', 'data/cta/1dc/bcf/'+self.irf, output_irf_file_name,
+        bkg_vals = ['CTA', self.caldb_name, 'NONE', 'NONE', 'ONLINE',
+                    'data/cta/{db:s}/bcf/{irf:s}'.format(db=self.caldb_name, irf=self.irf),
+                    output_irf_file_name,
                     'BCF', 'DATA', 'BKG', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
                     '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA background']
 
