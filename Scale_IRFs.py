@@ -423,7 +423,7 @@ if __name__ == "__main__":
     else:
         caldb = cmd_args.caldb
         irf = cmd_args.irf
-        psf_scale = cmd_args.psf_scale
+        psf_scale = float(cmd_args.psf_scale)
         aeff_energy_scale = float(cmd_args.aeff_energy_scale)
         aeff_energy_norm = float(cmd_args.aeff_energy_norm)
         aeff_energy_transition_width = float(cmd_args.aeff_energy_transition_width)
@@ -431,7 +431,7 @@ if __name__ == "__main__":
         aeff_theta_norm = float(cmd_args.aeff_theta_norm)
         aeff_theta_transition_width = float(cmd_args.aeff_theta_transition_width)
         output_irf_file_name = cmd_args.output_irf_file_name
-        plot_aeff_scale_map = cmd_args.plot_aeff_scale_map
+        plot_aeff_scale_map = cmd_args.plot_aeff_scale_map.lower == 'true'
 
         print("")
         print("=== Was called with the following settings ===")
