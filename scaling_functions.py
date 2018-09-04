@@ -57,7 +57,7 @@ def f_gradient_arr_dir(theta, theta_max_north, theta_max_south, hem):
     return res
 
 
-def f_step_energy(log_en, log_en1, res1, log_en2, res2, hem):
+def f_step_energy(log_en, break_points, step_trans_width=1.31):
     """
     Energy-dependent step error-function for both North and South IRFs.
 
@@ -65,16 +65,9 @@ def f_step_energy(log_en, log_en1, res1, log_en2, res2, hem):
     ----------
     log_en: ndarray
         Array with log energies, at which to evaluate the function.
-    log_en1: float
-        log of the energy at the first transition point.
-    res1: float
-        Energy resolution at the first transition point.
-    log_en2: float
-        log of the energy at the second transition point.
-    res2: float
-        Energy resolution at the second transition point.
-    hem: string
-        Hemisphere to which the IRFs are referred.
+    break_points: tuple
+        A list of the break points. Each entry should be a tuple of
+        (break_position, break_width).
     step_trans_width: float
         Transition width.
 
@@ -84,19 +77,30 @@ def f_step_energy(log_en, log_en1, res1, log_en2, res2, hem):
         Array of scaling coefficients in the [-1; 1] range.
     """
 
-    step_trans_width = 1.31
+    # Applying the first break point
+    break_point = break_points[0]
+    break_log_en = break_point[0]
+    break_width = break_point[1]
 
-    res = scipy.zeros_like(log_en)
+    res = scipy.tanh((log_en - break_log_en) / (step_trans_width * break_width))
+    sign = 1
 
-    if hem == "North":
-        res = scipy.tanh((log_en - log_en1) / (step_trans_width * res1))
-    elif hem == "South":
-        trans_log_energy = (log_en1 + log_en2) / 2.0
+    # If there are more break points given, applying them as well
+    for break_point in break_points[1:]:
+        # First recalling the previous break point position
+        break_log_en_old = break_log_en
+
+        # New break point data
+        break_log_en = break_point[0]
+        break_width = break_point[1]
+
+        # Will fill only points above the transition position
+        trans_log_energy = (break_log_en + break_log_en_old) / 2.0
         above_trans_en = scipy.where(log_en >= trans_log_energy)
-        below_trans_en = scipy.where(log_en < trans_log_energy)
 
-        res[below_trans_en] = scipy.tanh((log_en[below_trans_en] - log_en1) / (step_trans_width * res1))
-        res[above_trans_en] = -1 * scipy.tanh((log_en[above_trans_en] - log_en2) / (step_trans_width * res2))
+        # Flip the sign - above the transition position function behaviour is reversed
+        sign *= -1
+        res[above_trans_en] = sign * scipy.tanh((log_en[above_trans_en] - break_log_en) / (step_trans_width * break_width))
 
     return res
 
