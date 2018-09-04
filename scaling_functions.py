@@ -81,15 +81,20 @@ def f_step_energy(log_en, log_en1, res1, log_en2, res2, hem):
 
     # TODO: add the return value and params units to the docstring
 
-    # TODO: what's arg1?
-
-    # TODO sqrt() call can be simplified
-
     step_trans_width = 1.31
-    if hem == "North" or (hem == "South" and arg1 < scipy.sqrt(10**log_en1 * 10**log_en2)):
+
+    res = scipy.zeros_like(log_en)
+
+    if hem == "North":
         res = scipy.tanh((log_en - log_en1) / (step_trans_width * res1))
-    else:
-        res = scipy.tanh((log_en - log_en2) / (step_trans_width * res2))
+    elif hem == "South":
+        trans_log_energy = (log_en1 + log_en2) / 2.0
+        above_trans_en = scipy.where(log_en >= trans_log_energy)
+        below_trans_en = scipy.where(log_en < trans_log_energy)
+
+        res[below_trans_en] = scipy.tanh((log_en[below_trans_en] - log_en1) / (step_trans_width * res1))
+        res[above_trans_en] = -1 * scipy.tanh((log_en[above_trans_en] - log_en2) / (step_trans_width * res2))
+
     return res
 
 
