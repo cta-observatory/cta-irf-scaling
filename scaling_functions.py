@@ -63,8 +63,8 @@ def f_step_energy(log_en, log_en1, res1, log_en2, res2, hem):
 
     Parameters
     ----------
-    log_en: vector
-        log of the energy
+    log_en: ndarray
+        Array with log energies, at which to evaluate the function.
     log_en1: float
         log of the energy at the first transition point.
     res1: float
@@ -77,9 +77,12 @@ def f_step_energy(log_en, log_en1, res1, log_en2, res2, hem):
         Hemisphere to which the IRFs are referred.
     step_trans_width: float
         Transition width.
-    """
 
-    # TODO: add the return value and params units to the docstring
+    Returns
+    -------
+    ndarray
+        Array of scaling coefficients in the [-1; 1] range.
+    """
 
     step_trans_width = 1.31
 
