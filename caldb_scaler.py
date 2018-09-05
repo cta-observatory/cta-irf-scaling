@@ -82,7 +82,7 @@ class CalDB:
             print("  {}".format(available_irf))
             self.am_ok = False
 
-    def _scale_psf(self, input_irf_file, psf_scale, n_psf_components=3):
+    def _scale_psf(self, input_irf_file, config):
         """
         This internal method scales the IRF PSF extension.
 
@@ -90,18 +90,30 @@ class CalDB:
         ----------
         input_irf_file: pyfits.HDUList
             Open pyfits IRF file, which contains the PSF that should be scaled.
-        psf_scale: float
-            The scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
-        n_psf_components: int, optional
-            The number of PSF sub-components (gaussians) in the IRF file. Defaults to 3 (typical for prod3b).
+        config: dict
+            A dictionary with the scaling settings. Must have following keys defined:
+            "err_func_type": str
+                The name of the scaling function to use. Accepted values are: "constant".
+            If err_func_type == "constant":
+                scale: float
+                    The scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
 
         Returns
         -------
         None
         """
 
-        for psf_i in range(0, n_psf_components):
-            input_irf_file['POINT SPREAD FUNCTION'].data['SIGMA_{:d}'.format(psf_i + 1)] *= psf_scale
+        err_func_type = config['err_func_type']
+        scale_params = config[err_func_type]
+
+        if err_func_type == "constant":
+            # Constant scaling. Find all "sigma" values and scale them by the same factor.
+            column_names = [col.name for col in input_irf_file['POINT SPREAD FUNCTION'].columns]
+            sigma_columns = filter(lambda s: "sigma" in s.lower(), column_names)
+            for sigma_column in sigma_columns:
+                input_irf_file['POINT SPREAD FUNCTION'].data[sigma_column] *= scale_params['scale']
+        else:
+            raise ValueError("Unknown PSF scaling function {:s}".format(err_func_type))
 
     def _scale_aeff(self, input_irf_file,
                     hemisphere, obs2scale, err_func_type, const_scale,
@@ -184,9 +196,10 @@ class CalDB:
             # Step error function
             if err_func_type == "step":
                 print("Error function: step")
-                self._aeff['Area_new'] = self._aeff['Area'] * (
-                            1 + epsilon_aeff * f_step_energy(scipy.log10(energy), scipy.log10(e_transition1), e_res1,
-                                                             scipy.log10(e_transition2), e_res2, hemisphere))
+                break_points = ((scipy.log10(e_transition1), e_res1),
+                                (scipy.log10(e_transition2), e_res2))
+                self._aeff['Area_new'] = self._aeff['Area'] * (1 + epsilon_aeff * f_step_energy(scipy.log10(energy),
+                                                                                                break_points))
 
         # Scaling the Aeff off-axis angle dependence
         if obs2scale == "arrival_dir":
@@ -284,12 +297,7 @@ class CalDB:
         db_file.writeto(db_file_path, clobber=True)
         db_file.close()
 
-    def scale_irf(self,
-                  e_transition1, e_transition2, e_min, e_max_north, e_max_south, theta_transition1, theta_transition2,
-                  sigma_theta1, sigma_theta2, epsilon_aeff,
-                  hemisphere, obs2scale, err_func_type, const_scale,
-                  psf_scale=1.0,
-                  output_irf_file_name=""):
+    def scale_irf(self, config, output_irf_file_name=""):
         """
         This method performs scaling of the loaded IRF - both PSF and Aeff, if necessary.
         For the collection area two scalings can be applied: (1) vs energy and
@@ -347,22 +355,23 @@ class CalDB:
             input_irf_file = pyfits.open(self.input_irf_file_name, 'readonly')
 
             # Scaling the PSF
-            # self._scale_psf(input_irf_file, psf_scale)
+            self._scale_psf(input_irf_file, config['psf'])
 
             # Scaling the Aeff
-            self._scale_aeff(input_irf_file,
-                             hemisphere, obs2scale, err_func_type, const_scale,
-                             e_transition1, e_transition2, e_min, e_max_north, e_max_south, theta_transition1,
-                             theta_transition2, sigma_theta1, sigma_theta2, epsilon_aeff)
+            # self._scale_aeff(input_irf_file,
+            #                  hemisphere, obs2scale, err_func_type, const_scale,
+            #                  e_transition1, e_transition2, e_min, e_max_north, e_max_south, theta_transition1,
+            #                  theta_transition2, sigma_theta1, sigma_theta2, epsilon_aeff)
+            print("Good!")
 
             # Getting the new IRF and output file names
             if output_irf_file_name == "":
                 # No output file name was provided - generating one
 
-                output_epsilon_aeff = "S-{:.1f}".format(epsilon_aeff)
-                output_psf_part = "_P-{:.1f}".format(psf_scale)
-                output_aeff_energy_part = "A-{:s}-{:s}".format(obs2scale,
-                                                               err_func_type)
+                output_epsilon_aeff = "S-{:.1f}".format(config['aeff']['energy_scaling']['epsilon'])
+                output_psf_part = "_P-{:.1f}".format(config['psf']['scale'])
+                output_aeff_energy_part = "A-{:s}-{:s}".format(config['obs2scale'],
+                                                               config['err_func_type'])
                 # IRF name
                 output_irf_name = output_epsilon_aeff + output_psf_part + "_" + output_aeff_energy_part
                 # Output file name
@@ -377,10 +386,10 @@ class CalDB:
                                                                            irf=self.irf)
 
             # Writing the scaled IRF
-            input_irf_file.writeto(output_path + "/" + output_irf_file_name, clobber=True)
+            # input_irf_file.writeto(output_path + "/" + output_irf_file_name, clobber=True)
 
             # Updating the calibration data base with the new IRF
-            self._append_irf_to_db(output_irf_name, output_irf_file_name)
+            # self._append_irf_to_db(output_irf_name, output_irf_file_name)
         else:
             print("ERROR: something's wrong with the CALDB/IRF names. So can not update the data base.")
 
