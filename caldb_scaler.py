@@ -274,28 +274,28 @@ class CalDB:
         aeff_vals = ['CTA', self.caldb_name, 'NONE', 'NONE', 'ONLINE',
                      'data/cta/{db:s}/bcf/{irf:s}'.format(db=self.caldb_name, irf=self.irf),
                      output_irf_file_name,
-                     'BCF', 'DATA', 'EFF_AREA', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
+                     'BCF', 'DATA', 'EFF_AREA', 'NAME({:s})'.format(output_irf_name), 1,
                      '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA effective area']
 
         # PSF entry data
         psf_vals = ['CTA', self.caldb_name, 'NONE', 'NONE', 'ONLINE',
                     'data/cta/{db:s}/bcf/{irf:s}'.format(db=self.caldb_name, irf=self.irf),
                     output_irf_file_name,
-                    'BCF', 'DATA', 'RPSF', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
+                    'BCF', 'DATA', 'RPSF', 'NAME({:s})'.format(output_irf_name), 1,
                     '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA point spread function']
 
         # Edisp entry data
         edisp_vals = ['CTA', self.caldb_name, 'NONE', 'NONE', 'ONLINE',
                       'data/cta/{db:s}/bcf/{irf:s}'.format(db=self.caldb_name, irf=self.irf),
                       output_irf_file_name,
-                      'BCF', 'DATA', 'EDISP', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
+                      'BCF', 'DATA', 'EDISP', 'NAME({:s})'.format(output_irf_name), 1,
                       '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA energy dispersion']
 
         # Background entry data
         bkg_vals = ['CTA', self.caldb_name, 'NONE', 'NONE', 'ONLINE',
                     'data/cta/{db:s}/bcf/{irf:s}'.format(db=self.caldb_name, irf=self.irf),
                     output_irf_file_name,
-                    'BCF', 'DATA', 'BKG', 'NAME({:s})'.format(self.irf + '_' + output_irf_name), 1,
+                    'BCF', 'DATA', 'BKG', 'NAME({:s})'.format(output_irf_name), 1,
                     '2014-01-30', '00:00:00', 51544.0, 0, '14/01/30', 'CTA background']
 
         # Filling the columns of the new table

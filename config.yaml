@@ -2,7 +2,7 @@
 general:
     caldb: '1dc'
     irf: 'South_z20_50h'
-    output_irf_name: "my_irf"
+    output_irf_name: "my_South_z20_50h"
     # The name of the output IRF file, e.g. 'irf_scaled_version.fits' (the name must follow
     # the "irf_*.fits" template). The file will be put to the main directory of the chosen IRF.
     output_irf_file_name: "irf_scaled_version.fits"
