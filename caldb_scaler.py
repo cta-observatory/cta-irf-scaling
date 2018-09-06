@@ -117,48 +117,55 @@ class CalDB:
 
     def _scale_aeff(self, input_irf_file, config):
         """
-        This internal method scales the IRF collection area shape. Two scalings can be applied: (1) vs energy and
-        (2) vs off-axis angle. In both cases the scaling function is taken as (1 + scale * tanh((x-x0)/dx)). In case
-        (1) the scaling value x is log10(energy).
+        This internal method scales the IRF collection area shape.
+        Two scalings can be applied: (1) vs energy and (2) vs off-axis angle. In both cases
+        the scaling function is taken as (1 + scale * tanh((x-x0)/dx)). In case (1) the scaling
+        is performed in log-energy.
 
         Parameters
         ----------
         input_irf_file: pyfits.HDUList
             Open pyfits IRF file, which contains the Aeff that should be scaled.
-        hemisphere: string
-            Hemisphere (North-South). Extracted directly from the IRF name.
-        obs2scale: string
-            Observable involved in the scaling: choose between 'energy' or 'arrival_dir'.
-        err_func_type: string
-            Error function type: choose among 'constant', 'gradient', 'step'.
-        const_scale: float, optional (if constant error function type is selected).
-            Constant error function value. Default = 1.0.
-        e_transition1: float
-            Energy at the first transition point.
-        e_transition2: float
-            Energy at the second transition point.
-        e_min: float
-            Minimum energy where the analysis is performed.
-        e_max_north: float
-            Maximum energy where the analysis is performed (for North site).
-        e_max_south: float
-            Maximum energy where the analysis is performed (for South site).
-        theta_transition1: float
-            Angle at first transition point.
-        theta_transition1: float
-            Angle at the second transition point.
-        sigma_theta1: float
-            Angular resolution at the first transition point.
-        sigma_theta2: float
-            Angular resolution at the second transition point.
-        epsilon_aeff: float
-            IRF scaling factor.
-        step_trans_width: float
-            Transition width.
+
+        config: dict
+            A dictionary with the scaling settings. Must have following keys defined:
+            "energy_scaling": dict
+                Contains setting for the energy scaling (see the structure below).
+            "angular_scaling": dict
+                Contains setting for the off-center angle scaling (see the structure below).
+
+            In both cases, internally the above dictionaries should contain:
+            "err_func_type": str
+                The name of the scaling function to use. Accepted values are: "constant",
+                "gradient" and "step".
+
+            If err_func_type == "constant":
+                scale: float
+                    The scale factor. passing 1.0 results in no scaling.
+
+            If err_func_type == "gradient":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                range_min: float
+                    The x value (energy or off-center angle), that corresponds to -1 scale.
+                range_max: float
+                    The x value (energy or off-center angle), that corresponds to +1 scale.
+
+            If err_func_type == "step":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                transition_pos: list
+                    The list of x values (energy or off-center angle), at which
+                    step-like transitions occur. If scaling the energy dependence,
+                    values must be in TeVs, if angular - in degrees.
+                transition_widths: list
+                    The list of step-like transition widths, that correspond to transition_pos.
+                    For energy scaling the widths must be in log10 scale.
 
         Returns
         -------
         None
+
         """
 
         # Reading the Aeff parameters
