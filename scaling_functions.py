@@ -5,55 +5,28 @@ import scipy
 # ==================================
 
 
-def f_gradient_energy(en, en_min, en_max_north, en_max_south, hem):
+def gradient(x, x_min, x_max):
     """
-    Energy-dependent gradient error-function for both North and South IRFs.
+    Gradient scaling function. The gradient is computed
+    to result in +/-1 scales at x_max and x_min correspondingly.
 
     Parameters
     ----------
-    en: ndarray
-        Energy.
-    en_min: float
-        Minimum energy where the analysis is performed.
-    en_max_north: float
-        Maximum energy where the analysis is performed (for North site).
-    en_max_south: float
-        Maximum energy where the analysis is performed (for South site).
-    hem: string
-        Hemisphere to which the IRFs are referred.
+    x: ndarray
+        An input array, for which to compute the scalings.
+    x_min: float
+        A point, that corresponds to -1 output value.
+    x_max: float
+        A point, that corresponds to +1 output value.
+
+    Returns
+    -------
+    ndarray:
+        An array of scales, ranging [-1;1] in [x_min; x_max] range.
     """
 
-    # TODO: add the return value and params units to the docstring
+    res = (2*x - (x_min + x_max)) / (x_max - x_min)
 
-    if hem == "North":
-        res = (scipy.log10(en / en_min) + scipy.log10(en / en_max_north)) / scipy.log10(en_max_north / en_min)
-    else:
-        res = (scipy.log10(en / en_min) + scipy.log10(en / en_max_south)) / scipy.log10(en_max_south / en_min)
-    return res
-
-
-def f_gradient_arr_dir(theta, theta_max_north, theta_max_south, hem):
-    """
-    Arrival-direction-dependent gradient error-function for both North and South IRFs.
-
-    Parameters
-    ----------
-    theta: vector
-        Arrival direction.
-    theta_max_north: float
-        Maximum angle (for North site).
-    theta_max_south: float
-        Maximum angle (for South site).
-    hem: string
-        Hemisphere to which the IRFs are referred.
-    """
-
-    # TODO: add the return value and params units to the docstring
-
-    if hem == "North":
-        res = (2 * theta - theta_max_north) / theta_max_north
-    else:
-        res = (2 * theta - theta_max_south) / theta_max_south
     return res
 
 
