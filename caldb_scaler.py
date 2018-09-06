@@ -188,7 +188,7 @@ class CalDB:
             self._aeff['Area_new'] = self._aeff['Area'] * config['energy_scaling']['constant']['scale']
 
         # Gradients error function
-        if config['energy_scaling']['err_func_type'] == "gradient":
+        elif config['energy_scaling']['err_func_type'] == "gradient":
             scaling_params = config['energy_scaling']['gradient']
             self._aeff['Area_new'] = self._aeff['Area'] * (
                     1 + scaling_params['scale'] * gradient(scipy.log10(energy),
@@ -197,36 +197,45 @@ class CalDB:
             )
             
         # Step error function
-        if config['energy_scaling']['err_func_type'] == "step":
+        elif config['energy_scaling']['err_func_type'] == "step":
             scaling_params = config['energy_scaling']['step']
             break_points = list(zip(scipy.log10(scaling_params['transition_pos']),
                                     scaling_params['transition_widths']))
             self._aeff['Area_new'] = self._aeff['Area'] * (
                     1 + scaling_params['scale'] * step(scipy.log10(energy), break_points)
             )
+        else:
+            raise ValueError("Aeff energy scaling: unknown scaling function type '{:s}'"
+                             .format(config['energy_scaling']['err_func_type']))
         # ----------------------------------
 
         # ------------------------------------------
         # Scaling the Aeff off-axis angle dependence
 
+        # Constant error function
+        if config['angular_scaling']['err_func_type'] == "constant":
+            self._aeff['Area_new'] = self._aeff['Area_new'] * config['angular_scaling']['constant']['scale']
+
         # Gradients error function
-        if config['angular_scaling']['err_func_type'] == "gradient":
+        elif config['angular_scaling']['err_func_type'] == "gradient":
             scaling_params = config['angular_scaling']['gradient']
-            self._aeff['Area_new'] = self._aeff['Area'] * (
+            self._aeff['Area_new'] = self._aeff['Area_new'] * (
                     1 + scaling_params['scale'] * gradient(theta,
                                                            scaling_params['range_min'],
                                                            scaling_params['range_max'])
             )
 
         # Step error function
-        if config['angular_scaling']['err_func_type'] == "step":
+        elif config['angular_scaling']['err_func_type'] == "step":
             scaling_params = config['angular_scaling']['step']
             break_points = list(zip(scaling_params['transition_pos'],
                                     scaling_params['transition_widths']))
-            self._aeff['Area_new'] = self._aeff['Area'] * (
+            self._aeff['Area_new'] = self._aeff['Area_new'] * (
                     1 + scaling_params['scale'] * step(theta, break_points)
             )
-
+        else:
+            raise ValueError("Aeff angular scaling: unknown scaling function type '{:s}'"
+                             .format(config['angular_scaling']['err_func_type']))
         # ------------------------------------------
 
         # Recording the scaled Aeff
@@ -405,7 +414,7 @@ class CalDB:
         scale_map['E_edges'] = scipy.concatenate((self._aeff['Elow'], [self._aeff['Ehigh'][-1]]))
         scale_map['Theta_edges'] = scipy.concatenate((self._aeff['ThetaLow'], [self._aeff['ThetaHi'][-1]]))
 
-        scale_map['Map'] = self._aeff['Area_new']  # / self._aeff['Area']
+        scale_map['Map'] = self._aeff['Area_new'] / self._aeff['Area']
         wh_nan = scipy.where(scipy.isnan(scale_map['Map']))
         scale_map['Map'][wh_nan] = 0
         scale_map['Map'] -= 1
@@ -435,7 +444,6 @@ class CalDB:
 
         pyplot.xlabel('Energy, TeV')
         pyplot.ylabel('Off-center angle, deg')
-        #        pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['Map'].transpose(),
-        #                          cmap='bwr', vmin=vmin, vmax=vmax)
-        pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['Map'].transpose())
+        pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['Map'].transpose(),
+                          cmap='bwr', vmin=vmin, vmax=vmax)
         pyplot.colorbar()
