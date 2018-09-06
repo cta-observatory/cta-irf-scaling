@@ -115,10 +115,7 @@ class CalDB:
         else:
             raise ValueError("Unknown PSF scaling function {:s}".format(err_func_type))
 
-    def _scale_aeff(self, input_irf_file,
-                    hemisphere, obs2scale, err_func_type, const_scale,
-                    e_transition1, e_transition2, e_min, e_max_north, e_max_south, theta_transition1, theta_transition2,
-                    sigma_theta1, sigma_theta2, epsilon_aeff):
+    def _scale_aeff(self, input_irf_file, config):
         """
         This internal method scales the IRF collection area shape. Two scalings can be applied: (1) vs energy and
         (2) vs off-axis angle. In both cases the scaling function is taken as (1 + scale * tanh((x-x0)/dx)). In case
@@ -164,8 +161,6 @@ class CalDB:
         None
         """
 
-        # TODO: fix: not all used variables are passed to this method!
-
         # Reading the Aeff parameters
         self._aeff['Elow'] = input_irf_file['Effective area'].data['Energ_lo'][0].copy()
         self._aeff['Ehigh'] = input_irf_file['Effective area'].data['Energ_hi'][0].copy()
@@ -176,49 +171,56 @@ class CalDB:
         self._aeff['Theta'] = (self._aeff['ThetaLow'] + self._aeff['ThetaHi']) / 2.0
 
         # Creating the energy-theta mesh grid
-        print("===== Scaling IRF ===========")
-        print("Scaling Aeff")
         energy, theta = scipy.meshgrid(self._aeff['E'], self._aeff['Theta'], indexing='ij')
 
+        # ----------------------------------
         # Scaling the Aeff energy dependence
-        if obs2scale == "energy":
-            print("Observable involved: energy")
-            # Constant error function
-            if err_func_type == "constant":
-                print("Error function: constant. Scale ="),
-                print(const_scale)
-                self._aeff['Area_new'] = self._aeff['Area'] * const_scale
-            # Gradients error function
-            if err_func_type == "gradient":
-                print("Error function: gradient")
-                self._aeff['Area_new'] = self._aeff['Area'] * (
-                            1 + epsilon_aeff * f_gradient_energy(energy, e_min, e_max_north, e_max_south, hemisphere))
-            # Step error function
-            if err_func_type == "step":
-                print("Error function: step")
-                break_points = ((scipy.log10(e_transition1), e_res1),
-                                (scipy.log10(e_transition2), e_res2))
-                self._aeff['Area_new'] = self._aeff['Area'] * (1 + epsilon_aeff * f_step_energy(scipy.log10(energy),
-                                                                                                break_points))
 
+        # Constant error function
+        if config['energy_scaling']['err_func_type'] == "constant":
+            self._aeff['Area_new'] = self._aeff['Area'] * config['energy_scaling']['constant']['scale']
+
+        # Gradients error function
+        if config['energy_scaling']['err_func_type'] == "gradient":
+            scaling_params = config['energy_scaling']['gradient']
+            self._aeff['Area_new'] = self._aeff['Area'] * (
+                    1 + scaling_params['scale'] * gradient(scipy.log10(energy),
+                                                           scipy.log10(scaling_params['range_min']),
+                                                           scipy.log10(scaling_params['range_max']))
+            )
+            
+        # Step error function
+        if config['energy_scaling']['err_func_type'] == "step":
+            scaling_params = config['energy_scaling']['step']
+            break_points = list(zip(scipy.log10(scaling_params['transition_pos']),
+                                    scaling_params['transition_widths']))
+            self._aeff['Area_new'] = self._aeff['Area'] * (
+                    1 + scaling_params['scale'] * step(scipy.log10(energy), break_points)
+            )
+        # ----------------------------------
+
+        # ------------------------------------------
         # Scaling the Aeff off-axis angle dependence
-        if obs2scale == "arrival_dir":
-            print("Observable involved: arrival-direction")
-            # Gradients error function
-            if err_func_type == "gradient":
-                print("Error function: gradient.")
-                self._aeff['Area_new'] = self._aeff['Area'] * (
-                            1 + epsilon_aeff * f_gradient_arr_dir(theta, theta_max_north, theta_max_south, hemisphere))
-            # Step error function
-            if err_func_type == "step":
-                print("Error function: step.")
-                self._aeff['Area_new'] = self._aeff['Area'] * (
-                            1 + epsilon_aeff * f_step_arr_dir(theta, theta_transition1, sigma_theta1, theta_transition2,
-                                                              sigma_theta2, hemisphere))
 
-        print("Scaling factor:"),
-        print(epsilon_aeff)
-        print("===============================\n")
+        # Gradients error function
+        if config['angular_scaling']['err_func_type'] == "gradient":
+            scaling_params = config['angular_scaling']['gradient']
+            self._aeff['Area_new'] = self._aeff['Area'] * (
+                    1 + scaling_params['scale'] * gradient(theta,
+                                                           scaling_params['range_min'],
+                                                           scaling_params['range_max'])
+            )
+
+        # Step error function
+        if config['angular_scaling']['err_func_type'] == "step":
+            scaling_params = config['angular_scaling']['step']
+            break_points = list(zip(scaling_params['transition_pos'],
+                                    scaling_params['transition_widths']))
+            self._aeff['Area_new'] = self._aeff['Area'] * (
+                    1 + scaling_params['scale'] * step(theta, break_points)
+            )
+
+        # ------------------------------------------
 
         # Recording the scaled Aeff
         input_irf_file['Effective area'].data['EffArea'][0] = self._aeff['Area_new'].transpose()
@@ -297,7 +299,7 @@ class CalDB:
         db_file.writeto(db_file_path, clobber=True)
         db_file.close()
 
-    def scale_irf(self, config, output_irf_file_name=""):
+    def scale_irf(self, config):
         """
         This method performs scaling of the loaded IRF - both PSF and Aeff, if necessary.
         For the collection area two scalings can be applied: (1) vs energy and
@@ -358,27 +360,14 @@ class CalDB:
             self._scale_psf(input_irf_file, config['psf'])
 
             # Scaling the Aeff
-            # self._scale_aeff(input_irf_file,
-            #                  hemisphere, obs2scale, err_func_type, const_scale,
-            #                  e_transition1, e_transition2, e_min, e_max_north, e_max_south, theta_transition1,
-            #                  theta_transition2, sigma_theta1, sigma_theta2, epsilon_aeff)
+            self._scale_aeff(input_irf_file, config['aeff'])
             print("Good!")
 
             # Getting the new IRF and output file names
-            if output_irf_file_name == "":
-                # No output file name was provided - generating one
-
-                output_epsilon_aeff = "S-{:.1f}".format(config['aeff']['energy_scaling']['epsilon'])
-                output_psf_part = "_P-{:.1f}".format(config['psf']['scale'])
-                output_aeff_energy_part = "A-{:s}-{:s}".format(config['obs2scale'],
-                                                               config['err_func_type'])
-                # IRF name
-                output_irf_name = output_epsilon_aeff + output_psf_part + "_" + output_aeff_energy_part
-                # Output file name
-                output_irf_file_name = "irf_{:s}.fits".format(output_irf_name)
-            else:
-                # Output file name was provided. Will chunk the IRF name out of it.
-                output_irf_name = re.findall("irf_(.+).fits", output_irf_file_name)[0]
+            # IRF name
+            output_irf_name = config['general']['output_irf_name']
+            # Output file name
+            output_irf_file_name = config['general']['output_irf_file_name']
 
             # Figuring out the output path
             output_path = '{path:s}/data/cta/{caldb:s}/bcf/{irf:s}'.format(path=self.caldb_path,
