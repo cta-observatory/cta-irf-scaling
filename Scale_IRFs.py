@@ -41,37 +41,10 @@ if __name__ == "__main__":
     cmd_args = arg_parser.parse_args()
     # -----------------------------------------------
 
-    # --------   Variables (to be loaded from a config file)  --------------
-    config = yaml.load(open('config.yaml', 'r'))
-
     plot_aeff_scale_map = cmd_args.plot_aeff_scale_map
 
-    # # Extract the hemisphere from the IRF name:
-    # if "North" in config['irf']:
-    #     hemisphere = "North"
-    # else:
-    #     hemisphere = "South"
-    #
-    # # Checks:
-    # if ("North" not in config['irf']) and ("South" not in config['irf']):
-    #     print("Hemisphere not specified in IRF name. Exiting...")
-    #     exit()
-    #
-    # if config['obs2scale'] == '' or (config['obs2scale'] != 'energy' and config['obs2scale'] != 'arrival_dir'):
-    #     print("Observable for scaling was not properly specified. Exiting... ")
-    #     print("Please read the help!")
-    #     exit()
-    #
-    # if config['err_func_type'] == '' or (
-    #         config['err_func_type'] != 'constant' and config['err_func_type'] != 'gradient' and config['err_func_type'] != 'step'):
-    #     print("Error function type was not properly specified. Exiting... ")
-    #     print("Please read the help!")
-    #     exit()
-    #
-    # if config['obs2scale'] == 'arrival_dir' and config['err_func_type'] == 'constant':
-    #     print(
-    #         "Constant error function is not implemented for the arrival direction. Choose 'gradient' or 'step'. Exiting... ")
-    #     exit()
+    # Scaling settings
+    config = yaml.load(open('config.yaml', 'r'))
 
     # -------------------------
     print("")
@@ -122,14 +95,10 @@ if __name__ == "__main__":
 
     caldb = CalDB(config['general']['caldb'], config['general']['irf'], verbose=False)
 
-    # Scale +epsilon
     caldb.scale_irf(config)
 
-    # Scale -epsilon
-    # caldb.scale_irf()
-
-    # # Plot
-    # if plot_aeff_scale_map:
-    #     pyplot.clf()
-    #     caldb.plot_aeff_scale_map()
-    #     pyplot.show()
+    # Plot
+    if plot_aeff_scale_map:
+        pyplot.clf()
+        caldb.plot_aeff_scale_map()
+        pyplot.show()
