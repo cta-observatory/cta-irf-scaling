@@ -324,44 +324,62 @@ class CalDB:
 
         Parameters
         ----------
-        e_transition1: float
-            Energy at the first transition point.
-        e_transition2: float
-            Energy at the second transition point.
-        e_min: float
-            Minimum energy where the analysis is performed.
-        e_max_north: float
-            Maximum energy where the analysis is performed (for North site).
-        e_max_south: float
-            Maximum energy where the analysis is performed (for South site).
-        theta_transition1: float
-            Angle at first transition point.
-        theta_transition1: float
-            Angle at the second transition point.
-        sigma_theta1: float
-            Angular resolution at the first transition point.
-        sigma_theta2: float
-            Angular resolution at the second transition point.
-        epsilon_aeff: float
-            IRF scaling factor.
-        step_trans_width: float
-            Transition width.
-        hemisphere: string
-            Hemisphere (North-South). Extracted from the IRF name.
-        obs2scale: string
-            Observable involved in the scaling: choose between 'energy' or 'arrival_dir'.
-        err_func_type: string
-            Error function type: choose among 'constant', 'gradient', 'step'.
-        const_scale: float, optional (if constant error function type is selected).
-            Constant error function value. Default = 1.0.
-        psf_scale: float, optional
-            The PSF scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
-            Defaults to 1.0 - equivalent of no scaling.
-        output_irf_file_name: str, optional
-            The name of the output IRF file, e.g. 'irf_scaled_version.fits' (the name must follow the "irf_*.fits"
-            template). The file will be put to the main directory of the chosen IRF. If empty, the name will be
-            automatically generated.
-            Defaults to an empty string.
+        config: dict
+            A dictionary with the scaling settings. Must have following keys defined:
+            "general", "aeff", "psf".
+
+            Key "general" must be a dictionary, containing the following:
+            caldb: str
+                CALDB name, e.g. '1dc' or 'prod3b'.
+            irf: str
+                IRF name, e.g. 'South_z20_50h'
+            output_irf_name: str
+                The name of output IRF, say "my_irf".
+            output_irf_file_name: str:
+                The name of the output IRF file, e.g. 'irf_scaled_version.fits' (the name
+                must follow the "irf_*.fits" template, "irf_scaled_version.fits"). The file
+                will be put to the main directory of the chosen IRF.
+
+            Key "aeff" must be a dictionary, containing the following:
+            "energy_scaling": dict
+                Contains setting for the energy scaling (see the structure below).
+            "angular_scaling": dict
+                Contains setting for the off-center angle scaling (see the structure below).
+
+            In both cases, internally the above dictionaries should contain:
+            "err_func_type": str
+                The name of the scaling function to use. Accepted values are: "constant",
+                "gradient" and "step".
+
+            If err_func_type == "constant":
+                scale: float
+                    The scale factor. passing 1.0 results in no scaling.
+
+            If err_func_type == "gradient":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                range_min: float
+                    The x value (energy or off-center angle), that corresponds to -1 scale.
+                range_max: float
+                    The x value (energy or off-center angle), that corresponds to +1 scale.
+
+            If err_func_type == "step":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                transition_pos: list
+                    The list of x values (energy or off-center angle), at which
+                    step-like transitions occur. If scaling the energy dependence,
+                    values must be in TeVs, if angular - in degrees.
+                transition_widths: list
+                    The list of step-like transition widths, that correspond to transition_pos.
+                    For energy scaling the widths must be in log10 scale.
+
+            Key "psf" must be a dictionary, containing the following:
+            "err_func_type": str
+                The name of the scaling function to use. Accepted values are: "constant".
+            If err_func_type == "constant":
+                scale: float
+                    The scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
 
         Returns
         -------
@@ -377,7 +395,6 @@ class CalDB:
 
             # Scaling the Aeff
             self._scale_aeff(input_irf_file, config['aeff'])
-            print("Good!")
 
             # Getting the new IRF and output file names
             # IRF name
