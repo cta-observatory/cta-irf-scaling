@@ -312,7 +312,7 @@ class CalDB:
         db_file['CIF'].data = hdu.data
 
         # Saving the data base
-        db_file.writeto(db_file_path, clobber=True)
+        db_file.writeto(db_file_path, overwrite=True)
         db_file.close()
 
     def scale_irf(self, config):
@@ -408,10 +408,10 @@ class CalDB:
                                                                            irf=self.irf)
 
             # Writing the scaled IRF
-            # input_irf_file.writeto(output_path + "/" + output_irf_file_name, clobber=True)
+            input_irf_file.writeto(output_path + "/" + output_irf_file_name, overwrite=True)
 
             # Updating the calibration data base with the new IRF
-            # self._append_irf_to_db(output_irf_name, output_irf_file_name)
+            self._append_irf_to_db(output_irf_name, output_irf_file_name)
         else:
             print("ERROR: something's wrong with the CALDB/IRF names. So can not update the data base.")
 
