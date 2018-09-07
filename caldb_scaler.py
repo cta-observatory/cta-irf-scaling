@@ -148,14 +148,6 @@ class CalDB:
             sigma_name = 'sigma_{:d}'.format(i + 1)
             self._psf[sigma_name] = input_irf_file['POINT SPREAD FUNCTION'].data[sigma_name][0].transpose().copy()
 
-        for i in range(0, len(sigma_columns)):
-            if i == 0:
-                ampl_name = 'scale'
-            else:
-                ampl_name = 'ampl_{:d}'.format(i + 1)
-
-            self._psf[ampl_name] = input_irf_file['POINT SPREAD FUNCTION'].data[ampl_name][0].transpose().copy()
-
         self._psf['E'] = scipy.sqrt(self._psf['Elow'] * self._psf['Ehigh'])
         self._psf['Theta'] = (self._psf['ThetaLow'] + self._psf['ThetaHi']) / 2.0
         # --------------------------
@@ -171,7 +163,6 @@ class CalDB:
             scale_params = config['energy_scaling']["constant"]
             # Constant scaling. Loop over all "sigma" values and scale them by the same factor.
             for sigma_column in sigma_columns:
-                # input_irf_file['POINT SPREAD FUNCTION'].data[sigma_column] *= scale_params['scale']
                 self._psf[sigma_column + '_new'] = scale_params['scale'] * self._psf[sigma_column]
 
         # Gradients error function
@@ -241,13 +232,7 @@ class CalDB:
         for i in range(0, len(sigma_columns)):
             sigma_name = 'sigma_{:d}'.format(i + 1)
 
-            if i == 0:
-                ampl_name = 'scale'
-            else:
-                ampl_name = 'ampl_{:d}'.format(i + 1)
-
             input_irf_file['POINT SPREAD FUNCTION'].data[sigma_name][0] = self._psf[sigma_name + '_new'].transpose()
-            # input_irf_file['POINT SPREAD FUNCTION'].data[ampl_name][0] = self._psf[ampl_name + '_new'].transpose()
 
     def _scale_aeff(self, input_irf_file, config):
         """
