@@ -544,6 +544,35 @@ class CalDB:
 
         return scale_map
 
+    def get_psf_scale_map(self):
+        """
+        This method returns the PSF scale map, which can be useful for check of the used settings.
+        Must be run after the scale_irf() method.
+
+        Returns
+        -------
+        dict:
+            A dictionary with the PSF scale map.
+        """
+
+        scale_map = dict()
+
+        scale_map['E_edges'] = scipy.concatenate((self._psf['Elow'], [self._psf['Ehigh'][-1]]))
+        scale_map['Theta_edges'] = scipy.concatenate((self._psf['ThetaLow'], [self._psf['ThetaHi'][-1]]))
+
+        # Find all "sigma" values - tells how many PSF components we have in the IRF file
+        column_names = self._psf.keys()
+        sigma_columns = list(filter(lambda s: ("sigma" in s.lower()) and not ("new" in s.lower()),
+                                    column_names))
+
+        for sigma_column in sigma_columns:
+            scale_map[sigma_column] = self._psf[sigma_column + '_new'] / self._psf[sigma_column]
+            wh_nan = scipy.where(scipy.isnan(scale_map[sigma_column]))
+            scale_map[sigma_column][wh_nan] = 0
+            scale_map[sigma_column] -= 1
+
+        return scale_map
+
     def plot_aeff_scale_map(self, vmin=-0.5, vmax=0.5):
         """
         This method plots the Aeff scale map, which can be useful for check of the used settings.
@@ -569,5 +598,33 @@ class CalDB:
         pyplot.xlabel('Energy, TeV')
         pyplot.ylabel('Off-center angle, deg')
         pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['Map'].transpose(),
+                          cmap='bwr', vmin=vmin, vmax=vmax)
+        pyplot.colorbar()
+
+    def plot_psf_scale_map(self, vmin=-0.5, vmax=0.5):
+        """
+        This method plots the PSF scale map, which can be useful for check of the used settings.
+        Must be run after the scale_irf() method.
+
+        Parameters
+        ----------
+        vmin: float, optional
+            Minimal scale to plot. Defaults to -0.5.
+        vmax: float, optional
+            Maximal scale to plot. Defaults to 0.5.
+
+        Returns
+        -------
+        None
+        """
+
+        scale_map = self.get_psf_scale_map()
+
+        pyplot.title("PSF $\sigma_1$ scale map")
+        pyplot.semilogx()
+
+        pyplot.xlabel('Energy, TeV')
+        pyplot.ylabel('Off-center angle, deg')
+        pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['sigma_1'].transpose(),
                           cmap='bwr', vmin=vmin, vmax=vmax)
         pyplot.colorbar()
