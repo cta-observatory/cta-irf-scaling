@@ -38,7 +38,7 @@ aeff:
             range_max: 7.6  # deg
         step:
             scale: 0.05
-            transition_pos: [4.3, 7.6]  # deg
+            transition_pos: [2.0, 4.0]  # deg
             transition_widths: [0.1, 0.1]  # deg
 
 # PSF specific
@@ -46,7 +46,7 @@ psf:
    # Energy scaling
     energy_scaling:
         # Choices: 'constant', 'gradient', 'step'
-        err_func_type: 'step'
+        err_func_type: 'gradient'
         constant:
             scale: 1.0
         gradient:
@@ -71,6 +71,6 @@ psf:
             range_min: 0.0  # deg
             range_max: 7.6  # deg
         step:
-            scale: 0.05
-            transition_pos: [4.3, 7.6]  # deg
+            scale: 0.1
+            transition_pos: [2.0, 4.0]  # deg
             transition_widths: [0.1, 0.1]  # deg
