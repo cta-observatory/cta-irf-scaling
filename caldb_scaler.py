@@ -40,6 +40,7 @@ class CalDB:
         self.am_ok = True
 
         self._aeff = dict()
+        self._psf = dict()
 
         self._check_available_irfs()
 
@@ -103,17 +104,122 @@ class CalDB:
         None
         """
 
-        err_func_type = config['err_func_type']
-        scale_params = config[err_func_type]
+        # Find all "sigma" values - tells how many PSF components we have in the IRF file
+        column_names = [col.name.lower() for col in input_irf_file['POINT SPREAD FUNCTION'].columns]
+        sigma_columns = list(filter(lambda s: "sigma" in s.lower(), column_names))
 
-        if err_func_type == "constant":
-            # Constant scaling. Find all "sigma" values and scale them by the same factor.
-            column_names = [col.name for col in input_irf_file['POINT SPREAD FUNCTION'].columns]
-            sigma_columns = filter(lambda s: "sigma" in s.lower(), column_names)
+        # --------------------------
+        # Reading the PSF parameters
+        self._psf = dict()
+        self._psf['Elow'] = input_irf_file['POINT SPREAD FUNCTION'].data['Energ_lo'][0].copy()
+        self._psf['Ehigh'] = input_irf_file['POINT SPREAD FUNCTION'].data['Energ_hi'][0].copy()
+        self._psf['ThetaLow'] = input_irf_file['POINT SPREAD FUNCTION'].data['Theta_lo'][0].copy()
+        self._psf['ThetaHi'] = input_irf_file['POINT SPREAD FUNCTION'].data['Theta_hi'][0].copy()
+
+        for i in range(0, len(sigma_columns)):
+            sigma_name = 'sigma_{:d}'.format(i + 1)
+            self._psf[sigma_name] = input_irf_file['POINT SPREAD FUNCTION'].data[sigma_name][0].transpose().copy()
+
+        for i in range(0, len(sigma_columns)):
+            if i == 0:
+                ampl_name = 'scale'
+            else:
+                ampl_name = 'ampl_{:d}'.format(i + 1)
+
+            self._psf[ampl_name] = input_irf_file['POINT SPREAD FUNCTION'].data[ampl_name][0].transpose().copy()
+
+        self._psf['E'] = scipy.sqrt(self._psf['Elow'] * self._psf['Ehigh'])
+        self._psf['Theta'] = (self._psf['ThetaLow'] + self._psf['ThetaHi']) / 2.0
+        # --------------------------
+
+        # Creating the energy-theta mesh grid
+        energy, theta = scipy.meshgrid(self._psf['E'], self._psf['Theta'], indexing='ij')
+
+        # ---------------------------------
+        # Scaling the PSF energy dependence
+
+        # Constant error function
+        if config['energy_scaling']['err_func_type'] == "constant":
+            scale_params = config['energy_scaling']["constant"]
+            # Constant scaling. Loop over all "sigma" values and scale them by the same factor.
             for sigma_column in sigma_columns:
-                input_irf_file['POINT SPREAD FUNCTION'].data[sigma_column] *= scale_params['scale']
+                # input_irf_file['POINT SPREAD FUNCTION'].data[sigma_column] *= scale_params['scale']
+                self._psf[sigma_column + '_new'] = scale_params['scale'] * self._psf[sigma_column]
+
+        # Gradients error function
+        elif config['energy_scaling']['err_func_type'] == "gradient":
+            scale_params = config['energy_scaling']["gradient"]
+            for sigma_column in sigma_columns:
+                self._psf[sigma_column + '_new'] = self._psf[sigma_column] * (
+                        1 + scale_params['scale'] * gradient(scipy.log10(energy),
+                                                             scipy.log10(scale_params['range_min']),
+                                                             scipy.log10(scale_params['range_max']))
+                )
+
+        # Step error function
+        elif config['energy_scaling']['err_func_type'] == "step":
+            scale_params = config['energy_scaling']["step"]
+            break_points = list(zip(scipy.log10(scale_params['transition_pos']),
+                                    scale_params['transition_widths']))
+
+            for sigma_column in sigma_columns:
+                self._psf[sigma_column + '_new'] = self._psf[sigma_column] * (
+                        1 + scale_params['scale'] * step(scipy.log10(energy), break_points)
+                )
+
         else:
-            raise ValueError("Unknown PSF scaling function {:s}".format(err_func_type))
+            raise ValueError("Unknown PSF scaling function {:s}"
+                             .format(config['energy_scaling']['err_func_type']))
+        # ---------------------------------
+
+        # ---------------------------------
+        # Scaling the PSF angular dependence
+
+        # Constant error function
+        if config['angular_scaling']['err_func_type'] == "constant":
+            scale_params = config['angular_scaling']["constant"]
+            # Constant scaling. Loop over all "sigma" values and scale them by the same factor.
+            for sigma_column in sigma_columns:
+                # input_irf_file['POINT SPREAD FUNCTION'].data[sigma_column] *= scale_params['scale']
+                self._psf[sigma_column + '_new'] = scale_params['scale'] * self._psf[sigma_column + '_new']
+
+        # Gradients error function
+        elif config['angular_scaling']['err_func_type'] == "gradient":
+            scale_params = config['angular_scaling']["gradient"]
+            for sigma_column in sigma_columns:
+                self._psf[sigma_column + '_new'] = self._psf[sigma_column + '_new'] * (
+                        1 + scale_params['scale'] * gradient(theta,
+                                                             scale_params['range_min'],
+                                                             scale_params['range_max'])
+                )
+
+        # Step error function
+        elif config['angular_scaling']['err_func_type'] == "step":
+            scale_params = config['angular_scaling']["step"]
+            break_points = list(zip(scale_params['transition_pos'],
+                                    scale_params['transition_widths']))
+
+            for sigma_column in sigma_columns:
+                self._psf[sigma_column + '_new'] = self._psf[sigma_column + '_new'] * (
+                        1 + scale_params['scale'] * step(theta, break_points)
+                )
+
+        else:
+            raise ValueError("Unknown PSF scaling function {:s}"
+                             .format(config['angular_scaling']['err_func_type']))
+        # ---------------------------------
+
+        # Recording the scaled PSF
+        for i in range(0, len(sigma_columns)):
+            sigma_name = 'sigma_{:d}'.format(i + 1)
+
+            if i == 0:
+                ampl_name = 'scale'
+            else:
+                ampl_name = 'ampl_{:d}'.format(i + 1)
+
+            input_irf_file['POINT SPREAD FUNCTION'].data[sigma_name][0] = self._psf[sigma_name + '_new'].transpose()
+            # input_irf_file['POINT SPREAD FUNCTION'].data[ampl_name][0] = self._psf[ampl_name + '_new'].transpose()
 
     def _scale_aeff(self, input_irf_file, config):
         """
@@ -457,6 +563,7 @@ class CalDB:
 
         scale_map = self.get_aeff_scale_map()
 
+        pyplot.title("Collection area scale map")
         pyplot.semilogx()
 
         pyplot.xlabel('Energy, TeV')
