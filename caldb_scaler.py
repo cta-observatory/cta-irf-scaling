@@ -93,15 +93,43 @@ class CalDB:
             Open pyfits IRF file, which contains the PSF that should be scaled.
         config: dict
             A dictionary with the scaling settings. Must have following keys defined:
+            "energy_scaling": dict
+                Contains setting for the energy scaling (see the structure below).
+            "angular_scaling": dict
+                Contains setting for the off-center angle scaling (see the structure below).
+
+            In both cases, internally the above dictionaries should contain:
             "err_func_type": str
-                The name of the scaling function to use. Accepted values are: "constant".
+                The name of the scaling function to use. Accepted values are: "constant",
+                "gradient" and "step".
+
             If err_func_type == "constant":
                 scale: float
-                    The scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
+                    The scale factor. passing 1.0 results in no scaling.
+
+            If err_func_type == "gradient":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                range_min: float
+                    The x value (energy or off-center angle), that corresponds to -1 scale.
+                range_max: float
+                    The x value (energy or off-center angle), that corresponds to +1 scale.
+
+            If err_func_type == "step":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                transition_pos: list
+                    The list of x values (energy or off-center angle), at which
+                    step-like transitions occur. If scaling the energy dependence,
+                    values must be in TeVs, if angular - in degrees.
+                transition_widths: list
+                    The list of step-like transition widths, that correspond to transition_pos.
+                    For energy scaling the widths must be in log10 scale.
 
         Returns
         -------
         None
+
         """
 
         # Find all "sigma" values - tells how many PSF components we have in the IRF file
@@ -446,7 +474,7 @@ class CalDB:
                 must follow the "irf_*.fits" template, "irf_scaled_version.fits"). The file
                 will be put to the main directory of the chosen IRF.
 
-            Key "aeff" must be a dictionary, containing the following:
+            Keys "aeff" and "psf" must be dictionaries, containing the following:
             "energy_scaling": dict
                 Contains setting for the energy scaling (see the structure below).
             "angular_scaling": dict
@@ -480,16 +508,10 @@ class CalDB:
                     The list of step-like transition widths, that correspond to transition_pos.
                     For energy scaling the widths must be in log10 scale.
 
-            Key "psf" must be a dictionary, containing the following:
-            "err_func_type": str
-                The name of the scaling function to use. Accepted values are: "constant".
-            If err_func_type == "constant":
-                scale: float
-                    The scale factor. Each PSF sigma (there can be several!) will be multiplied by it.
-
         Returns
         -------
         None
+
         """
 
         if self.am_ok:
