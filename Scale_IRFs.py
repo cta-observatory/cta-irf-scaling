@@ -81,12 +81,24 @@ if __name__ == "__main__":
     # -------------------------
     print("  PSF:")
 
-    err_func_type = config['psf']['err_func_type']
-    scale_params = config['psf'][err_func_type]
+    print("    Energy scaling:")
+
+    err_func_type = config['psf']['energy_scaling']['err_func_type']
+    scale_params = config['psf']['energy_scaling'][err_func_type]
 
     print("      {:.<23s}:  {:s}".format('err_func_type', err_func_type))
     for key in scale_params:
         print("      {:.<23s}:  {}".format(key, scale_params[key]))
+
+    print("    Angular scaling:")
+
+    err_func_type = config['psf']['angular_scaling']['err_func_type']
+    scale_params = config['psf']['angular_scaling'][err_func_type]
+
+    print("      {:.<23s}:  {:s}".format('err_func_type', err_func_type))
+    for key in scale_params:
+        print("      {:.<23s}:  {}".format(key, scale_params[key]))
+        
     print("")
     # -------------------------
 
@@ -99,6 +111,14 @@ if __name__ == "__main__":
 
     # Plot
     if plot_aeff_scale_map:
+        pyplot.figure(figsize=(10, 4))
         pyplot.clf()
+
+        pyplot.subplot(121)
         caldb.plot_aeff_scale_map()
+
+        pyplot.subplot(122)
+        caldb.plot_psf_scale_map()
+
+        pyplot.tight_layout()
         pyplot.show()
