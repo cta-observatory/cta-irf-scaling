@@ -544,7 +544,11 @@ class CalDB:
         scale_map['E_edges'] = scipy.concatenate((self._aeff['Elow'], [self._aeff['Ehigh'][-1]]))
         scale_map['Theta_edges'] = scipy.concatenate((self._aeff['ThetaLow'], [self._aeff['ThetaHi'][-1]]))
 
-        scale_map['Map'] = self._aeff['Area_new'] / self._aeff['Area']
+        # Avoiding division by zero
+        can_divide = self._aeff['Area'] > 0
+        scale_map['Map'] = scipy.zeros_like(self._aeff['Area_new'])
+        scale_map['Map'][can_divide] = self._aeff['Area_new'][can_divide] / self._aeff['Area'][can_divide]
+
         wh_nan = scipy.where(scipy.isnan(scale_map['Map']))
         scale_map['Map'][wh_nan] = 0
         scale_map['Map'] -= 1
@@ -573,7 +577,12 @@ class CalDB:
                                     column_names))
 
         for sigma_column in sigma_columns:
-            scale_map[sigma_column] = self._psf[sigma_column + '_new'] / self._psf[sigma_column]
+            # Avoiding division by zero
+            can_divide = self._psf[sigma_column] > 0
+
+            scale_map[sigma_column] = scipy.zeros_like(self._psf[sigma_column])
+            scale_map[sigma_column][can_divide] = self._psf[sigma_column + '_new'][can_divide] / self._psf[sigma_column][can_divide]
+
             wh_nan = scipy.where(scipy.isnan(scale_map[sigma_column]))
             scale_map[sigma_column][wh_nan] = 0
             scale_map[sigma_column] -= 1
@@ -582,7 +591,8 @@ class CalDB:
 
     def plot_aeff_scale_map(self, vmin=-0.5, vmax=0.5):
         """
-        This method plots the Aeff scale map, which can be useful for check of the used settings.
+        This method plots the collection area scale map, which can be useful
+        for checking the used settings.
         Must be run after the scale_irf() method.
 
         Parameters
@@ -610,7 +620,8 @@ class CalDB:
 
     def plot_psf_scale_map(self, vmin=-0.5, vmax=0.5):
         """
-        This method plots the PSF scale map, which can be useful for check of the used settings.
+        This method plots the PSF scale map (for sigma_1 parameter), which can be useful
+        for checking the used settings.
         Must be run after the scale_irf() method.
 
         Parameters
