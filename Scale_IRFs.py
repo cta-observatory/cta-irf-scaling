@@ -102,6 +102,29 @@ if __name__ == "__main__":
     print("")
     # -------------------------
 
+    # -------------------------
+    print("  Energy Dispersion:")
+    print("    Energy scaling:")
+
+    err_func_type = config['edisp']['energy_scaling']['err_func_type']
+    scale_params = config['edisp']['energy_scaling'][err_func_type]
+
+    print("      {:.<23s}:  {:s}".format('err_func_type', err_func_type))
+    for key in scale_params:
+        print("      {:.<23s}:  {}".format(key, scale_params[key]))
+
+    print("    Angular scaling:")
+
+    err_func_type = config['edisp']['angular_scaling']['err_func_type']
+    scale_params = config['edisp']['angular_scaling'][err_func_type]
+
+    print("      {:.<23s}:  {:s}".format('err_func_type', err_func_type))
+    for key in scale_params:
+        print("      {:.<23s}:  {}".format(key, scale_params[key]))
+        
+    print("")
+    # -------------------------
+
     # Scale IRF
     caldb_path = os.environ['CALDB']
 
@@ -111,14 +134,17 @@ if __name__ == "__main__":
 
     # Plot
     if plot_aeff_scale_map:
-        pyplot.figure(figsize=(10, 4))
+        pyplot.figure(figsize=(15, 4))
         pyplot.clf()
 
-        pyplot.subplot(121)
+        pyplot.subplot(131)
         caldb.plot_aeff_scale_map()
 
-        pyplot.subplot(122)
+        pyplot.subplot(132)
         caldb.plot_psf_scale_map()
+
+        pyplot.subplot(133)
+        caldb.plot_edisp_scale_map()
 
         pyplot.tight_layout()
         pyplot.show()

@@ -41,6 +41,7 @@ class CalDB:
 
         self._aeff = dict()
         self._psf = dict()
+        self._edips = dict()
 
         self._check_available_irfs()
 
@@ -360,6 +361,133 @@ class CalDB:
         # Recording the scaled Aeff
         input_irf_file['Effective area'].data['EffArea'][0] = self._aeff['Area_new'].transpose()
 
+    def _scale_edisp(self, input_irf_file, config):
+        """
+        This internal method scales the IRF energy dispersion through the Migration Matrix.
+        Two scalings can be applied: (1) vs energy and (2) vs off-axis angle. In both cases
+        the scaling function is taken as (1 + scale * tanh((x-x0)/dx)). In case (1) the scaling
+        is performed in log-energy.
+
+        Parameters
+        ----------
+        input_irf_file: pyfits.HDUList
+            Open pyfits IRF file, which contains the Migration Matrix that should be scaled.
+
+        config: dict
+            A dictionary with the scaling settings. Must have following keys defined:
+            "energy_scaling": dict
+                Contains setting for the energy scaling (see the structure below).
+            "angular_scaling": dict
+                Contains setting for the off-center angle scaling (see the structure below).
+
+            In both cases, internally the above dictionaries should contain:
+            "err_func_type": str
+                The name of the scaling function to use. Accepted values are: "constant",
+                "gradient" and "step".
+
+            If err_func_type == "constant":
+                scale: float
+                    The scale factor. passing 1.0 results in no scaling.
+
+            If err_func_type == "gradient":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                range_min: float
+                    The x value (energy or off-center angle), that corresponds to -1 scale.
+                range_max: float
+                    The x value (energy or off-center angle), that corresponds to +1 scale.
+
+            If err_func_type == "step":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                transition_pos: list
+                    The list of x values (energy or off-center angle), at which
+                    step-like transitions occur. If scaling the energy dependence,
+                    values must be in TeVs, if angular - in degrees.
+                transition_widths: list
+                    The list of step-like transition widths, that correspond to transition_pos.
+                    For energy scaling the widths must be in log10 scale.
+
+        Returns
+        -------
+        None
+
+        """
+
+        # Reading the MATRIX parameters
+        self._edisp = dict()
+        self._edisp['Elow'] = input_irf_file['ENERGY DISPERSION'].data['ETRUE_LO'][0].copy()
+        self._edisp['Ehigh'] = input_irf_file['ENERGY DISPERSION'].data['ETRUE_HI'][0].copy()
+        self._edisp['ThetaLow'] = input_irf_file['ENERGY DISPERSION'].data['THETA_LO'][0].copy()
+        self._edisp['ThetaHi'] = input_irf_file['ENERGY DISPERSION'].data['THETA_HI'][0].copy()
+        self._edisp['Mlow'] = input_irf_file['ENERGY DISPERSION'].data['MIGRA_LO'][0].copy()
+        self._edisp['Mhigh'] = input_irf_file['ENERGY DISPERSION'].data['MIGRA_HI'][0].copy()
+        self._edisp['Matrix_'] = input_irf_file['ENERGY DISPERSION'].data['MATRIX'][0].transpose().copy()
+        self._edisp['E'] = scipy.sqrt(self._edisp['Elow'] * self._edisp['Ehigh'])
+        self._edisp['M'] = (self._edisp['Mlow'] + self._edisp['Mhigh']) / 2.0
+        self._edisp['T'] = (self._edisp['ThetaLow'] + self._edisp['ThetaHi']) / 2.0
+        # Creating the energy-migration matix-theta mesh grid
+        energy, migration, theta = scipy.meshgrid(self._edisp['E'], self._edisp['M'], self._edisp['T'], indexing='ij')
+
+        # -------------------------------------------
+        # Scaling the Matrix energy dependence
+
+        # Constant error function
+        if config['energy_scaling']['err_func_type'] == "constant":
+            self._edisp['Matrix_new'] = self._edisp['Matrix_'] * config['energy_scaling']['constant']['scale']
+
+        # Gradients error function
+        elif config['energy_scaling']['err_func_type'] == "gradient":
+            scaling_params = config['energy_scaling']['gradient']
+            self._edisp['Matrix_new'] = self._edisp['Matrix_'] * (
+                    1. + scaling_params['scale'] * gradient(scipy.log10(energy),
+                                                           scipy.log10(scaling_params['range_min']),
+                                                           scipy.log10(scaling_params['range_max'])) 
+            )
+        # Step error function
+        elif config['energy_scaling']['err_func_type'] == "step":
+            scaling_params = config['energy_scaling']['step']
+            break_points = list(zip(scipy.log10(scaling_params['transition_pos']),
+                                    scaling_params['transition_widths']))
+            self._edisp['Matrix_new'] = self._edisp['Matrix_'] * (
+                    1 + scaling_params['scale'] * step(scipy.log10(energy), break_points)
+            )
+        else:
+            raise ValueError("Edisp energy scaling: unknown scaling function type '{:s}'"
+                             .format(config['energy_scaling']['err_func_type'])
+            )
+        # -------------------------------------------
+        # Scaling the Matrix off-axis angle dependence
+
+        # Constant error function
+        if config['angular_scaling']['err_func_type'] == "constant":
+            self._edisp['Matrix_new'] = self._edisp['Matrix_new'] * config['angular_scaling']['constant']['scale']
+
+        # Gradients error function
+        elif config['angular_scaling']['err_func_type'] == "gradient":
+            scaling_params = config['angular_scaling']['gradient']
+            self._edisp['Matrix_new'] = self._edisp['Matrix_new'] * (
+                    1. + scaling_params['scale'] * gradient(scipy.log10(theta),
+                                                           scipy.log10(scaling_params['range_min']),
+                                                           scipy.log10(scaling_params['range_max'])) 
+            )
+        # Step error function
+        elif config['angular_scaling']['err_func_type'] == "step":
+            scaling_params = config['angular_scaling']['step']
+            break_points = list(zip(scipy.log10(scaling_params['transition_pos']),
+                                    scaling_params['transition_widths']))
+            self._edisp['Matrix_new'] = self._edisp['Matrix_new'] * (
+                    1 + scaling_params['scale'] * step(scipy.log10(theta), break_points)
+            )
+        else:
+            raise ValueError("Edisp angular scaling: unknown scaling function type '{:s}'"
+                             .format(config['energy_scaling']['err_func_type'])
+            )
+        # ------------------------------------------
+        # Recording the scaled Matrix
+        input_irf_file['ENERGY DISPERSION'].data['MATRIX'][0] = self._edisp['Matrix_new'].transpose()
+    # ------------------------------------------
+
     def _append_irf_to_db(self, output_irf_name, output_irf_file_name):
         """
         This internal method appends the new IRF data to the existing calibration data base.
@@ -509,6 +637,9 @@ class CalDB:
             # Scaling the Aeff
             self._scale_aeff(input_irf_file, config['aeff'])
 
+            # Scaling the Edisp
+            self._scale_edisp(input_irf_file, config['edisp'])
+
             # Getting the new IRF and output file names
             # IRF name
             output_irf_name = config['general']['output_irf_name']
@@ -589,6 +720,30 @@ class CalDB:
 
         return scale_map
 
+    def get_edisp_scale_map(self):
+        """
+        This method plots the  Migration (= E_reco/E_true) ratio, after / before the scale, 
+        which can be useful for check of the used settings.
+        Must be run after the scale_irf() method.
+
+        Returns
+        -------
+        dict:
+            A dictionary with the PSF scale map.
+        """
+        
+        scale_map = dict()
+
+        scale_map['E_edges'] = scipy.concatenate((self._edisp['Elow'], [self._edisp['Ehigh'][-1]]))
+        scale_map['M_edges'] = scipy.concatenate((self._edisp['Mlow'], [self._edisp['Mhigh'][-1]]))
+        scale_map['Theta_edges'] = scipy.concatenate((self._edisp['ThetaLow'], [self._edisp['ThetaHi'][-1]]))
+
+        can_divide = self._edisp['Matrix_'] > 0
+        scale_map['Map'] = scipy.zeros_like(self._edisp['Matrix_new'])
+        scale_map['Map'][can_divide] = self._edisp['Matrix_new'][can_divide]/self._edisp['Matrix_'][can_divide]       
+
+        return scale_map
+
     def plot_aeff_scale_map(self, vmin=-0.5, vmax=0.5):
         """
         This method plots the collection area scale map, which can be useful
@@ -615,7 +770,7 @@ class CalDB:
         pyplot.xlabel('Energy, TeV')
         pyplot.ylabel('Off-center angle, deg')
         pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['Map'].transpose(),
-                          cmap='bwr', vmin=vmin, vmax=vmax)
+                          cmap='seismic', vmin=vmin, vmax=vmax)
         pyplot.colorbar()
 
     def plot_psf_scale_map(self, vmin=-0.5, vmax=0.5):
@@ -644,5 +799,39 @@ class CalDB:
         pyplot.xlabel('Energy, TeV')
         pyplot.ylabel('Off-center angle, deg')
         pyplot.pcolormesh(scale_map['E_edges'], scale_map['Theta_edges'], scale_map['sigma_1'].transpose(),
-                          cmap='bwr', vmin=vmin, vmax=vmax)
+                          cmap='seismic', vmin=vmin, vmax=vmax)
         pyplot.colorbar()
+
+
+
+    def plot_edisp_scale_map(self,vmin=0.3, vmax=1.7, xlim_lo=1e-2,xlim_hi=5e2):
+        """
+        This method plots the  Migration (= E_reco/E_true) ratio, after / before the scale, 
+        which can be useful for checking the used settings.
+        Must be run after the scale_irf() method.
+
+        Parameters
+        ----------
+        vmin: float, optional
+            Minimal scale to plot. Defaults to -0.5.
+        vmax: float, optional
+            Maximal scale to plot. Defaults to 0.5.
+
+        Returns
+        -------
+        None
+        """
+
+        scale_map = self.get_edisp_scale_map()
+        
+        pyplot.title("Energy dispersion scale map")
+        pyplot.semilogx()
+
+        pyplot.xlim(xlim_lo,xlim_hi)
+            
+        pyplot.xlabel('E$_{\\rm true}$ [TeV]')
+        pyplot.ylabel('E$_{\\rm reco}$/E$_{\\rm true}$')
+        
+        pyplot.pcolormesh(scale_map['E_edges'], scale_map['M_edges'], scale_map['Map'].transpose()[0],
+                          cmap='seismic', visible='False', vmin=vmin, vmax=vmax)
+        pyplot.colorbar().set_label('IRF$_{\\rm scaled}$/IRF',  y=0.5, rotation=90)
