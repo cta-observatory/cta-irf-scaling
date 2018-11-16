@@ -2,6 +2,7 @@ import os
 import shutil
 import glob
 import re
+import numpy
 import scipy
 import astropy.io.fits as pyfits
 from matplotlib import pyplot
@@ -296,7 +297,7 @@ class CalDB:
         self._aeff['Area'] = input_irf_file['Effective area'].data['EffArea'][0].transpose().copy()
         self._aeff['E'] = scipy.sqrt(self._aeff['Elow'] * self._aeff['Ehigh'])
         self._aeff['Theta'] = (self._aeff['ThetaLow'] + self._aeff['ThetaHi']) / 2.0
-
+        
         # Creating the energy-theta mesh grid
         energy, theta = scipy.meshgrid(self._aeff['E'], self._aeff['Theta'], indexing='ij')
 
@@ -360,6 +361,165 @@ class CalDB:
 
         # Recording the scaled Aeff
         input_irf_file['Effective area'].data['EffArea'][0] = self._aeff['Area_new'].transpose()
+
+
+    def _scale_bkg(self, input_irf_file, config):
+        """
+        This internal method scales the IRF Background Rate, N.
+        Two scalings can be applied: (1) vs energy and (2) vs off-axis angle. In both cases
+        the scaling function is taken as (1 + scale * tanh((x-x0)/dx)). In case (1) the scaling
+        is performed in log-energy.
+
+        Parameters
+        ----------
+        input_irf_file: pyfits.HDUList
+            Open pyfits IRF file, which contains the Aeff that should be scaled.
+
+        config: dict
+            A dictionary with the scaling settings. Must have following keys defined:
+            "energy_scaling": dict
+                Contains setting for the energy scaling (see the structure below).
+            "angular_scaling": dict
+                Contains setting for the off-center angle scaling (see the structure below).
+
+            In both cases, internally the above dictionaries should contain:
+            "err_func_type": str
+                The name of the scaling function to use. Accepted values are: "constant",
+                "gradient" and "step".
+
+            If err_func_type == "constant":
+                scale: float
+                    The scale factor. passing 1.0 results in no scaling.
+
+            If err_func_type == "gradient":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                range_min: float
+                    The x value (energy or off-center angle), that corresponds to -1 scale.
+                range_max: float
+                    The x value (energy or off-center angle), that corresponds to +1 scale.
+
+            If err_func_type == "step":
+                scale: float
+                    The scale factor. passing 0.0 results in no scaling.
+                transition_pos: list
+                    The list of x values (energy or off-center angle), at which
+                    step-like transitions occur. If scaling the energy dependence,
+                    values must be in TeVs, if angular - in degrees.
+                transition_widths: list
+                    The list of step-like transition widths, that correspond to transition_pos.
+                    For energy scaling the widths must be in log10 scale.
+
+        Returns
+        -------
+        None
+
+        """
+
+        # Reading the Background parameters.
+        self._bkg = dict()
+        self._bkg['dxlow']  = input_irf_file['BACKGROUND'].data['detx_lo'][0].copy()
+        self._bkg['dxhigh'] = input_irf_file['BACKGROUND'].data['detx_hi'][0].copy()
+        self._bkg['dylow']  = input_irf_file['BACKGROUND'].data['dety_lo'][0].copy()
+        self._bkg['dyhigh'] = input_irf_file['BACKGROUND'].data['dety_hi'][0].copy()
+        self._bkg['Elow']   = input_irf_file['BACKGROUND'].data['energ_lo'][0].copy()
+        self._bkg['Ehigh']  = input_irf_file['BACKGROUND'].data['energ_hi'][0].copy()
+        self._bkg['bckgnd'] = input_irf_file['BACKGROUND'].data['bgd'][0].transpose().copy()
+        
+        self._bkg['detx'] = (self._bkg['dxlow'] + self._bkg['dxhigh']) / 2.0
+        self._bkg['dety'] = (self._bkg['dylow'] + self._bkg['dyhigh']) / 2.0
+        self._bkg['enrg'] = scipy.sqrt(self._bkg['Elow'] * self._bkg['Ehigh'])
+
+        # Creating the [detx - dety - energy] mesh grid.
+        detx, dety, energy = scipy.meshgrid(self._bkg['detx'], self._bkg['dety'], self._bkg['enrg'], indexing='ij')
+        
+        # ----------------------------------
+        # Scaling the Background Energy dependence.
+
+        # Constant error function
+        if config['energy_scaling']['err_func_type'] == "constant":
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd'] * config['energy_scaling']['constant']['scale']
+
+        # Gradients error function
+        elif config['energy_scaling']['err_func_type'] == "gradient":
+            scaling_params = config['energy_scaling']['gradient']
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd'] * (
+                    1 + scaling_params['scale'] * gradient(scipy.log10(energy),
+                                                           scipy.log10(scaling_params['range_min']),
+                                                           scipy.log10(scaling_params['range_max']))
+            )
+            
+        # Step error function
+        elif config['energy_scaling']['err_func_type'] == "step":
+            scaling_params = config['energy_scaling']['step']
+            break_points = list(zip(scipy.log10(scaling_params['transition_pos']),
+                                    scaling_params['transition_widths']))
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd'] * (
+                    1 + scaling_params['scale'] * step(scipy.log10(energy), break_points)
+            )
+        else:
+            raise ValueError("Background energy scaling: unknown scaling function type '{:s}'"
+                             .format(config['energy_scaling']['err_func_type']))
+
+        # -------------------------------------------
+        # Scaling the Background Angular dependence
+
+        # Angular (FOV coordinate X-axis binning)
+        # Constant error function
+        if config['angular_scaling']['err_func_type'] == "constant":
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd_new'] * config['angular_scaling']['constant']['scale']
+
+        # Gradients error function
+        elif config['angular_scaling']['err_func_type'] == "gradient":
+            scaling_params = config['angular_scaling']['gradient']
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd_new'] * (
+                    1. + scaling_params['scale'] * gradient(detx,
+                                                            scaling_params['range_min'],
+                                                            scaling_params['range_max']) 
+            )
+        # Step error function
+        elif config['angular_scaling']['err_func_type'] == "step":
+            scaling_params = config['angular_scaling']['step']
+            break_points = list(zip(scaling_params['transition_pos'],
+                                    scaling_params['transition_widths']))
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd_new'] * (
+                    1 + scaling_params['scale'] * step(detx, break_points)
+            )
+        else:
+            raise ValueError("Background angular scaling: unknown scaling function type '{:s}'"
+                             .format(config['angular_scaling']['err_func_type'])
+            )
+
+        # Angular (FOV coordinate Y-axis binning)
+        # Constant error function
+        if config['angular_scaling']['err_func_type'] == "constant":
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd_new'] * config['angular_scaling']['constant']['scale']
+
+        # Gradients error function
+        elif config['angular_scaling']['err_func_type'] == "gradient":
+            scaling_params = config['angular_scaling']['gradient']
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd_new'] * (
+                    1. + scaling_params['scale'] * gradient(dety,
+                                                            scaling_params['range_min'],
+                                                            scaling_params['range_max']) 
+            )
+        # Step error function
+        elif config['angular_scaling']['err_func_type'] == "step":
+            scaling_params = config['angular_scaling']['step']
+            break_points = list(zip(scaling_params['transition_pos'],
+                                    scaling_params['transition_widths']))
+            self._bkg['bckgnd_new'] = self._bkg['bckgnd_new'] * (
+                    1 + scaling_params['scale'] * step(dety, break_points)
+            )
+        else:
+            raise ValueError("Background angular scaling: unknown scaling function type '{:s}'"
+                             .format(config['angular_scaling']['err_func_type'])
+            )
+
+        # ----------------------------------
+        # Recording the scaled Background
+        input_irf_file['BACKGROUND'].data['bgd'][0] = self._bkg['bckgnd_new'].transpose()
+
 
     def _scale_edisp(self, input_irf_file, config):
         """
@@ -636,7 +796,10 @@ class CalDB:
 
             # Scaling the Aeff
             self._scale_aeff(input_irf_file, config['aeff'])
-
+            
+            # Scaling the Background
+            self._scale_bkg(input_irf_file, config['bkg'])
+            
             # Scaling the Edisp
             self._scale_edisp(input_irf_file, config['edisp'])
 
@@ -744,6 +907,27 @@ class CalDB:
 
         return scale_map
 
+
+    def get_bkg_scale_map(self):
+        """
+        This method plots the scaled Background ratio, after / before the scale, 
+        which can be useful to check for the used settings.
+        Must be run after the scale_irf() method.
+        """
+        
+        scale_map = dict()
+        
+        scale_map['detx_edges'] = scipy.concatenate((self._bkg['dxlow'], [self._bkg['dxhigh'][-1]]))
+        scale_map['dety_edges'] = scipy.concatenate((self._bkg['dylow'], [self._bkg['dyhigh'][-1]]))
+        scale_map['E_edges']    = scipy.concatenate((self._bkg['Elow'],  [self._bkg['Ehigh'][-1]]))
+        
+        can_divide = self._bkg['bckgnd'] > 0
+        scale_map['Map'] = scipy.zeros_like(self._bkg['bckgnd_new'])
+        scale_map['Map'][can_divide] = self._bkg['bckgnd_new'][can_divide]/self._bkg['bckgnd'][can_divide]
+        
+        return scale_map
+
+
     def plot_aeff_scale_map(self, vmin=-0.5, vmax=0.5):
         """
         This method plots the collection area scale map, which can be useful
@@ -803,7 +987,6 @@ class CalDB:
         pyplot.colorbar()
 
 
-
     def plot_edisp_scale_map(self,vmin=0.3, vmax=1.7, xlim_lo=1e-2,xlim_hi=5e2):
         """
         This method plots the  Migration (= E_reco/E_true) ratio, after / before the scale, 
@@ -835,3 +1018,70 @@ class CalDB:
         pyplot.pcolormesh(scale_map['E_edges'], scale_map['M_edges'], scale_map['Map'].transpose()[0],
                           cmap='seismic', visible='False', vmin=vmin, vmax=vmax)
         pyplot.colorbar().set_label('IRF$_{\\rm scaled}$/IRF',  y=0.5, rotation=90)
+
+
+    def plot_bkg_scale_map_detx(self, vmin=0.0, vmax=1.3):
+        """
+        This method plots the collection area scale map, which can be useful
+        for checking the used settings.
+        Must be run after the scale_irf() method.
+
+        Parameters
+        ----------
+        vmin: float, optional
+            Minimal scale to plot. Defaults to -0.5.
+        vmax: float, optional
+            Maximal scale to plot. Defaults to 0.5.
+
+        Returns
+        -------
+        None
+        """
+        
+        scale_map = self.get_bkg_scale_map()
+
+        pyplot.title("Background scale map")
+        pyplot.semilogx()
+
+        pyplot.xlabel('Energy, TeV')
+        pyplot.ylabel('FOV coordinate X-axis binning (in AltAz frame), deg')
+        
+        tp = numpy.swapaxes(scale_map['Map'], 0, 2)
+
+        pyplot.pcolormesh(scale_map['E_edges'], scale_map['detx_edges'], tp.transpose()[20],
+                          cmap='seismic', vmin=vmin, vmax=vmax)
+        pyplot.colorbar()
+
+    def plot_bkg_scale_map_dety(self, vmin=0.0, vmax=1.3):
+        """
+        This method plots the collection area scale map, which can be useful
+        for checking the used settings.
+        Must be run after the scale_irf() method.
+
+        Parameters
+        ----------
+        vmin: float, optional
+            Minimal scale to plot. Defaults to -0.5.
+        vmax: float, optional
+            Maximal scale to plot. Defaults to 0.5.
+
+        Returns
+        -------
+        None
+        """
+        
+        scale_map = self.get_bkg_scale_map()
+
+        pyplot.title("Background scale map")
+        pyplot.semilogx()
+
+        pyplot.xlabel('Energy, TeV')
+        pyplot.ylabel('FOV coordinate Y-axis binning (in AltAz frame), deg')
+        
+        tp = numpy.swapaxes(scale_map['Map'], 0, 2)
+
+        pyplot.pcolormesh(scale_map['E_edges'], scale_map['dety_edges'], tp.transpose()[30],
+                          cmap='seismic', vmin=vmin, vmax=vmax)
+        pyplot.colorbar().set_label('IRF$_{\\rm scaled}$/IRF',  y=0.5, rotation=90)
+
+
