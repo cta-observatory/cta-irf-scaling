@@ -77,10 +77,32 @@ if __name__ == "__main__":
 
     print("")
     # -------------------------
+    
+    # -------------------------
+    print("  Background:")
+    print("    Energy scaling:")
 
+    err_func_type = config['bkg']['energy_scaling']['err_func_type']
+    scale_params = config['bkg']['energy_scaling'][err_func_type]
+
+    print("      {:.<23s}:  {:s}".format('err_func_type', err_func_type))
+    for key in scale_params:
+        print("      {:.<23s}:  {}".format(key, scale_params[key]))
+
+    print("    Angular scaling:")
+
+    err_func_type = config['bkg']['angular_scaling']['err_func_type']
+    scale_params = config['bkg']['angular_scaling'][err_func_type]
+
+    print("      {:.<23s}:  {:s}".format('err_func_type', err_func_type))
+    for key in scale_params:
+        print("      {:.<23s}:  {}".format(key, scale_params[key]))
+
+    print("")
+    # -------------------------
+    
     # -------------------------
     print("  PSF:")
-
     print("    Energy scaling:")
 
     err_func_type = config['psf']['energy_scaling']['err_func_type']
@@ -134,17 +156,27 @@ if __name__ == "__main__":
 
     # Plot
     if plot_aeff_scale_map:
-        pyplot.figure(figsize=(15, 4))
+        pyplot.figure(figsize=(14, 8))
         pyplot.clf()
-
-        pyplot.subplot(131)
+        
+        pyplot.subplot(231)
         caldb.plot_aeff_scale_map()
-
-        pyplot.subplot(132)
+        
+        pyplot.subplot(232)
         caldb.plot_psf_scale_map()
-
-        pyplot.subplot(133)
+        
+        pyplot.subplot(233)
         caldb.plot_edisp_scale_map()
-
+        
+        pyplot.subplot(234)
+        caldb.plot_bkg_scale_map_detx()
+        
+        pyplot.subplot(235)
+        caldb.plot_bkg_scale_map_dety()
+        
         pyplot.tight_layout()
         pyplot.show()
+
+
+
+

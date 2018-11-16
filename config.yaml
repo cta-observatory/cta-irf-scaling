@@ -41,6 +41,42 @@ aeff:
             transition_pos: [2.0, 4.0]  # deg
             transition_widths: [0.1, 0.1]  # deg
 
+
+# Background specific
+bkg:
+    # Energy scaling
+    energy_scaling:
+        # Choices: 'constant', 'gradient', 'step'
+        err_func_type: 'gradient'
+        constant:
+            scale: 1.0
+        gradient:
+            scale: 0.2
+            range_min: 0.01  # TeV
+            range_max: 200.0  # TeV
+        step:
+            scale: 0.2
+            # Transition energies in TeV
+            transition_pos: [0.15, 5.0]
+            # Log10 transition widths (to be determined from IRF)
+            transition_widths: [0.11, 0.06]
+
+    # Angular scaling
+    angular_scaling:
+        # Choices: 'constant', 'gradient', 'step'
+        err_func_type: 'gradient'
+        constant:
+            scale: 1.0
+        gradient:
+            scale: 0.2
+            range_min: 0.0  # deg
+            range_max: 7.6  # deg
+        step:
+            scale: 0.1
+            transition_pos: [2.0, 4.0]  # deg
+            transition_widths: [0.1, 0.1]  # deg
+
+
 # PSF specific
 psf:
    # Energy scaling
@@ -74,6 +110,7 @@ psf:
             scale: 0.1
             transition_pos: [2.0, 4.0]  # deg
             transition_widths: [0.1, 0.1]  # deg
+
 
 # Edisp specific
 edisp:
