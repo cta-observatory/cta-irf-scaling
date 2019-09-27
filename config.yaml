@@ -1,6 +1,7 @@
 # Configuration file for Scale_IRFs.py code.
 general:
     caldb: '1dc'
+    #caldb: 'prod3bv1'
     irf: 'South_z20_50h'
     output_irf_name: "my_South_z20_50h"
     # The name of the output IRF file, e.g. 'irf_scaled_version.fits' (the name must follow
@@ -29,7 +30,7 @@ aeff:
     # Angular scaling
     angular_scaling:
         # Choices: 'constant', 'gradient', 'step'
-        err_func_type: 'step'
+        err_func_type: 'gradient'
         constant:
             scale: 1.0
         gradient:
@@ -41,6 +42,42 @@ aeff:
             transition_pos: [2.0, 4.0]  # deg
             transition_widths: [0.1, 0.1]  # deg
 
+
+# Background specific
+bkg:
+    # Energy scaling
+    energy_scaling:
+        # Choices: 'constant', 'gradient', 'step'
+        err_func_type: 'gradient'
+        constant:
+            scale: .5
+        gradient:
+            scale: 0.2
+            range_min: 0.01  # TeV
+            range_max: 200.0  # TeV
+        step:
+            scale: 0.2
+            # Transition energies in TeV
+            transition_pos: [0.15, 5.0]
+            # Log10 transition widths (to be determined from IRF)
+            transition_widths: [0.11, 0.06]
+
+    # Angular scaling
+    angular_scaling:
+        # Choices: 'constant', 'gradient', 'step'
+        err_func_type: 'gradient'
+        constant:
+            scale: 1.
+        gradient:
+            scale: 0.2
+            range_min: 0.0  # deg
+            range_max: 7.6  # deg
+        step:
+            scale: 0.1
+            transition_pos: [2.0, 4.0]  # deg
+            transition_widths: [0.1, 0.1]  # deg
+
+
 # PSF specific
 psf:
    # Energy scaling
@@ -48,7 +85,7 @@ psf:
         # Choices: 'constant', 'gradient', 'step'
         err_func_type: 'gradient'
         constant:
-            scale: 1.0
+            scale: 1
         gradient:
             scale: 0.1
             range_min: 0.1  # TeV
@@ -65,7 +102,7 @@ psf:
         # Choices: 'constant', 'gradient', 'step'
         err_func_type: 'gradient'
         constant:
-            scale: 1.0
+            scale: 1
         gradient:
             scale: 0.1
             range_min: 0.0  # deg
@@ -74,3 +111,23 @@ psf:
             scale: 0.1
             transition_pos: [2.0, 4.0]  # deg
             transition_widths: [0.1, 0.1]  # deg
+
+
+# Edisp specific
+edisp:
+    #Scaling
+    energy_scaling:
+        # Choices: 'constant', 'gradient', 'step'
+        err_func_type: 'gradient'
+        constant:
+          scale: 1.0  
+        gradient:
+            scale: 0.5 
+            range_min: 0.02  # TeV
+            range_max: 300.0  # TeV
+        step:
+            scale: 0.
+            # Transition energies in TeV
+            transition_pos: [0.15, 5.0]
+            # Log10 transition widths (to be determined from IRF)
+            transition_widths: [0.11, 0.06]
