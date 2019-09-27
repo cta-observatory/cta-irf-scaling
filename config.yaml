@@ -1,7 +1,6 @@
 # Configuration file for Scale_IRFs.py code.
 general:
-    caldb: '1dc'
-    #caldb: 'prod3bv1'
+    caldb: '1dc' 
     irf: 'South_z20_50h'
     output_irf_name: "my_South_z20_50h"
     # The name of the output IRF file, e.g. 'irf_scaled_version.fits' (the name must follow
