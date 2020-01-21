@@ -176,5 +176,3 @@ if __name__ == "__main__":
         
         pyplot.tight_layout()
         pyplot.show()
-
-
