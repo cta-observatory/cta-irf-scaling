@@ -1,6 +1,6 @@
 # Configuration file for Scale_IRFs.py code.
 general:
-    caldb: '1dc' 
+    caldb: '1dc'
     irf: 'South_z20_50h'
     output_irf_name: "my_South_z20_50h"
     # The name of the output IRF file, e.g. 'irf_scaled_version.fits' (the name must follow
@@ -49,7 +49,7 @@ bkg:
         # Choices: 'constant', 'gradient', 'step'
         err_func_type: 'gradient'
         constant:
-            scale: .5
+            scale: 1.0
         gradient:
             scale: 0.2
             range_min: 0.01  # TeV
@@ -66,7 +66,7 @@ bkg:
         # Choices: 'constant', 'gradient', 'step'
         err_func_type: 'gradient'
         constant:
-            scale: 1.
+            scale: 1.0
         gradient:
             scale: 0.2
             range_min: 0.0  # deg
@@ -84,7 +84,7 @@ psf:
         # Choices: 'constant', 'gradient', 'step'
         err_func_type: 'gradient'
         constant:
-            scale: 1
+            scale: 1.0
         gradient:
             scale: 0.1
             range_min: 0.1  # TeV
@@ -101,7 +101,7 @@ psf:
         # Choices: 'constant', 'gradient', 'step'
         err_func_type: 'gradient'
         constant:
-            scale: 1
+            scale: 1.0
         gradient:
             scale: 0.1
             range_min: 0.0  # deg
@@ -119,13 +119,13 @@ edisp:
         # Choices: 'constant', 'gradient', 'step'
         err_func_type: 'gradient'
         constant:
-          scale: 1.0  
+          scale: 1.0
         gradient:
-            scale: 0.5 
+            scale: 0.1 
             range_min: 0.02  # TeV
             range_max: 300.0  # TeV
         step:
-            scale: 0.
+            scale: 0.5
             # Transition energies in TeV
             transition_pos: [0.15, 5.0]
             # Log10 transition widths (to be determined from IRF)
