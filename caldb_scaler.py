@@ -575,8 +575,6 @@ class CalDB:
         self._edisp['Mlow'] = input_irf_file['ENERGY DISPERSION'].data['MIGRA_LO'][0].copy()
         self._edisp['Mhigh'] = input_irf_file['ENERGY DISPERSION'].data['MIGRA_HI'][0].copy()
         self._edisp['M'] = (self._edisp['Mlow'] + self._edisp['Mhigh']) / 2.0
-        self._edisp['Mhigh_new'] = self._edisp['Mhigh']
-        self._edisp['Mlow_new'] = self._edisp['Mlow']
 
         # -------------------------------------------
         # Scaling the Energy dependence
@@ -959,7 +957,7 @@ class CalDB:
         pyplot.colorbar()
 
 
-    def plot_edisp_scale_map(self,vmin=0.5, vmax=1.5, xlim_lo=1e-2,xlim_hi=5e2):
+    def plot_edisp_scale_map(self,vmin=0.5, vmax=1.5):
         """
         This method plots the variable M = (MIGRA_LO + MIGRA_HI)/2  after and before the scale, 
         which can be useful for checking the used settings.
@@ -976,8 +974,8 @@ class CalDB:
         pyplot.xlabel('MIGRA')
         pyplot.ylabel('MIGRA scaled')
 
-        pyplot.step(self._edisp['M'],self._edisp['M'],color='C7', linestyle='--', linewidth=2, where='mid', label='Before')
-        pyplot.step(self._edisp['M'],self._edisp['M_new'], color='midnightblue',linewidth=2, where='mid',label='After')
+        pyplot.step(self._edisp['M'],self._edisp['M'], color='C7', linestyle='--', linewidth=2, where='mid', label='Before')
+        pyplot.step(self._edisp['M'],self._edisp['M_new'], color='midnightblue', linewidth=2, where='mid', label='After')
 
         pyplot.legend(loc=4 , frameon=False)
 
