@@ -121,7 +121,7 @@ edisp:
         constant:
           scale: 1.0
         gradient:
-            scale: 0.1 
+            scale: 0.1
             range_min: 0.02  # TeV
             range_max: 300.0  # TeV
         step:
