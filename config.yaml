@@ -130,18 +130,3 @@ edisp:
             transition_pos: [0.15, 5.0]
             # Log10 transition widths (to be determined from IRF)
             transition_widths: [0.11, 0.06]
-    # Angular scaling
-    angular_scaling:
-        # Choices: 'constant', 'gradient', 'step'
-        err_func_type: 'step'
-        constant:
-            scale: 1.0
-        gradient:
-            scale: 0.1
-
-            range_min: 0.1  # deg
-            range_max: 7.6  # deg
-        step:
-            scale: 0.1
-            transition_pos: [2.0, 4.0]  # deg
-            transition_widths: [0.1, 0.1]  # deg

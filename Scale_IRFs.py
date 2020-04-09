@@ -135,14 +135,14 @@ if __name__ == "__main__":
     for key in scale_params:
         print("      {:.<23s}:  {}".format(key, scale_params[key]))
 
-    print("    Angular scaling:")
+    #print("    Angular scaling:")
 
-    err_func_type = config['edisp']['angular_scaling']['err_func_type']
-    scale_params = config['edisp']['angular_scaling'][err_func_type]
+    #err_func_type = config['edisp']['angular_scaling']['err_func_type']
+    #scale_params = config['edisp']['angular_scaling'][err_func_type]
 
-    print("      {:.<23s}:  {:s}".format('err_func_type', err_func_type))
-    for key in scale_params:
-        print("      {:.<23s}:  {}".format(key, scale_params[key]))
+    #print("      {:.<23s}:  {:s}".format('err_func_type', err_func_type))
+    #for key in scale_params:
+    #    print("      {:.<23s}:  {}".format(key, scale_params[key]))
         
     print("")
     # -------------------------
@@ -176,7 +176,3 @@ if __name__ == "__main__":
         
         pyplot.tight_layout()
         pyplot.show()
-
-
-
-
