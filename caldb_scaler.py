@@ -424,7 +424,7 @@ class CalDB:
         self._bkg['dyhigh'] = input_irf_file['BACKGROUND'].data['dety_hi'][0].copy()
         self._bkg['Elow']   = input_irf_file['BACKGROUND'].data['energ_lo'][0].copy()
         self._bkg['Ehigh']  = input_irf_file['BACKGROUND'].data['energ_hi'][0].copy()
-        self._bkg['bckgnd'] = input_irf_file['BACKGROUND'].data['bgd'][0].transpose().copy()
+        self._bkg['bckgnd'] = input_irf_file['BACKGROUND'].data['bkg'][0].transpose().copy()
         
         self._bkg['detx'] = (self._bkg['dxlow'] + self._bkg['dxhigh']) / 2.0
         self._bkg['dety'] = (self._bkg['dylow'] + self._bkg['dyhigh']) / 2.0
@@ -518,7 +518,7 @@ class CalDB:
 
         # ----------------------------------
         # Recording the scaled Background
-        input_irf_file['BACKGROUND'].data['bgd'][0] = self._bkg['bckgnd_new'].transpose()
+        input_irf_file['BACKGROUND'].data['bkg'][0] = self._bkg['bckgnd_new'].transpose()
 
 
     def _scale_edisp(self, input_irf_file, config):
