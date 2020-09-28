@@ -44,7 +44,7 @@ if __name__ == "__main__":
     plot_aeff_scale_map = cmd_args.plot_aeff_scale_map
 
     # Scaling settings
-    config = yaml.load(open('config.yaml', 'r'))
+    config = yaml.load(open(cmd_args.config, 'r'))
 
     # -------------------------
     print("")
